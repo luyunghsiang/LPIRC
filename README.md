@@ -1,28 +1,28 @@
 # LPIRC
 Low-Power Image Recognition Challenge
 
-# Requirements
+## Requirements
 
-# Relevant Files
+## Relevant Files
 
-# Usage
+## Usage
 
-# Referee Program
+## Referee Program
 Referee program performs the following operations:
-1. Communicate with competing client devices.
-2. Communicate with power meter and log power readings.
-3. Perform post processing to declare winner.
+- Communicate with competing client devices.
+- Communicate with power meter and log power readings.
+- Perform post processing to declare winner.
 
-## Server
-### Web framework
-### Configure host server
-### Perform client login/authentication
-### Send test images
-### Log test results
+### Server
+#### Web framework
+#### Configure host server
+#### Perform client login/authentication
+#### Send test images
+#### Log test results
 
-## Power Meter
-## Matlab Post-Processing
-## Sample Client
+### Power Meter
+### Matlab Post-Processing
+### Sample Client
 
 
-# References
+## References
