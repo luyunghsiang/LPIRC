@@ -12,7 +12,7 @@ Main Tasks:
 
 Requirements:
 -------------
-1. Python v2.7
+1. Python v2.7.3
 2. Flask - Microframework for Python
 
 Usage:
@@ -97,8 +97,8 @@ def server_help():
         host/help
         (Post) host/login [username&password] example: username=user&password=pass
         (Post) host/verify [token] example: token=daksldjsaldkjlkj32.....
-        (get/Post) host/image/?[#Image]  [token]  example: token=lsadkjsldj... host/image/10
-        (get/Post) host/result/?[#Image]  [token]  example: token=lsadkjsldj... host/result/10
+        (get/Post) host/image/?image=[#Image]  [token]  example: token=lsadkjsldj... host/image/?image=10
+        (get/Post) host/result/?image=[#Image]  [token]  example: token=lsadkjsldj... host/result/?image=10
     """
     return Response(response=server_help_message, status=200)
 
@@ -127,6 +127,19 @@ def token_check():
         return Response(response='Invalid', status=200)
     else:
         return Response(response='Valid', status=200)
+
+
+# Send Images
+@app.route("/image/",methods=['post','get'])
+def send_image():
+    token = request.form['token']
+    if verify_user_token(token) is None:
+        return Response(response='Invalid User', status=200)
+    else:
+        # Token Verified, Send back images
+        image_number = request.args.get('image')
+        print "#Image = "+image_number
+        return send_from_directory('images','01_01.png',as_attachment=True)
 
 
 # Verify user credentials
