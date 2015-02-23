@@ -47,7 +47,7 @@ Following URLs are recognized, served and issued:
 
 
 """
-
+import cgi
 import getopt, sys                                                        # Parser for command-line options
 from flask import Flask, url_for, send_from_directory, request, Response  # Webserver Microframework
 from flask.ext.login import LoginManager, UserMixin, login_required       # Login manager 
@@ -139,7 +139,40 @@ def send_image():
         # Token Verified, Send back images
         image_number = request.args.get('image')
         print "#Image = "+image_number
-        return send_from_directory('images','01_01.png',as_attachment=True)
+        return send_from_directory('./../images','image1.jpg',as_attachment=True)
+
+
+# Store result
+@app.route("/result",methods=['post'])
+def store_result():
+    token = request.form['token']
+    if verify_user_token(token) is None:
+        return Response(response='Invalid User', status=200)
+    else:
+        # Token Verified, Send back images
+       	form = cgi.FieldStorage()
+#		fp=self.rfile,
+#		headers=self.headers,environ={'REQUEST_METHOD':'POST',
+#			'CONTENT_TYPE':self.headers['Content-Type'],
+#			})
+	image_name = request.form.getlist("image_name")
+	CLASS_ID = request.form.getlist("CLASS_ID")
+	confidence = request.form.getlist("confidence")
+	xmin = request.form.getlist("xmin")
+	ymin = request.form.getlist("ymin")
+	xmax = request.form.getlist("xmax")
+	ymax = request.form.getlist("ymax")
+	if len(image_name)==len(CLASS_ID)==len(confidence)==len(xmin)==len(ymin)==len(xmax)==len(ymax)>0:
+		s=""
+		for item in range(0,len(ymax)):
+			s=s+(image_name[item] + "," + CLASS_ID[item] + "," + confidence[item] + "," + xmin[item] + "," + ymin[item] + "," + xmax[item] + "," + ymax[item] + "\n")
+			with open('./out.csv','a') as fout:
+				fout.write(s)	
+				fout.close()	
+     		return "Result Stored\n"
+	else:
+		print("Incorrect lines\n")
+		return "Incorrect Lines\n"
 
 
 # Verify user credentials
