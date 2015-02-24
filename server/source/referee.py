@@ -98,7 +98,8 @@ def server_help():
         (Post) host/login [username&password] example: username=user&password=pass
         (Post) host/verify [token] example: token=daksldjsaldkjlkj32.....
         (get/Post) host/image/?image=[#Image]  [token]  example: token=lsadkjsldj... host/image/?image=10
-        (get/Post) host/result/?image=[#Image]  [token]  example: token=lsadkjsldj... host/result/?image=10
+        (Post) host/result [token&image_name&CLASS_ID&confidence&xmin&xmax&ymin&ymax&...]  example: token=daksldjsaldkjlkj32.....&image_name=picase&CLASS_ID=2&confidence=.3&xmin=123&ymin=132&xmax=456&ymax=450... [note: n complete lines can be added in single post. To make n entries, 7n+1 form values]
+
     """
     return Response(response=server_help_message, status=200)
 
