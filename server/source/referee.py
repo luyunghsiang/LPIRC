@@ -32,8 +32,9 @@ Options:
                 Default: images/*.png
 
          --result
-                Test results (Relative to root directory)
-                Default: result/result.csv
+                Test results Directory (Relative to root directory)
+		The results of user John is stored as /result/John.csv
+                Default: result
 
          --debug
                 Run server in debug mode
@@ -47,6 +48,7 @@ Following URLs are recognized, served and issued:
 
 
 """
+from random import randint
 import cgi
 import getopt, sys                                                        # Parser for command-line options
 from flask import Flask, url_for, send_from_directory, request, Response  # Webserver Microframework
@@ -63,11 +65,12 @@ login_manager.init_app(app)
 # Global Variables
 host_ipaddress = '127.0.0.1'
 host_port = '5000'
-test_images = 'images/*.png'
-test_result = 'result/result.csv'
+test_images = 'images'
+test_result = 'result'
 mode_debug = 'True' #'None'
 server_secret_key = 'ITSASECRET'
-
+result_file = 'result'
+sent_image_dictionary =[]
 
 # Minimal Flask-Login Example
 # Ref: http://gouthamanbalaraman.com/minimal-flask-login-example.html
@@ -108,12 +111,16 @@ def server_help():
 @app.route('/login', methods=['post','get'])
 @app.route('/get_token', methods=['post','get'])
 def login_check():
+    global result_file
+    global sent_image_dictionary
+    sent_image_dictionary	 = []
     rx_username = request.form['username']
     rx_password = request.form['password']
     # Validate username and password
     if verify_user_entry(rx_username,rx_password) is None:
         return Response(response='Incorrect username or password', status=200)
     else:
+	result_file = rx_username
         # Generate Token
         s = JSONWebSignatureSerializer(server_secret_key)
         token = s.dumps({'username': rx_username, 'password' : rx_password})
@@ -133,29 +140,37 @@ def token_check():
 # Send Images
 @app.route("/image/",methods=['post','get'])
 def send_image():
+    global test_images
+    global sent_image_dictionary
     token = request.form['token']
     if verify_user_token(token) is None:
         return Response(response='Invalid User', status=200)
     else:
         # Token Verified, Send back images
         image_number = request.args.get('image')
-        print "#Image = "+image_number
-        return send_from_directory('./../images','image1.jpg',as_attachment=True)
+	sent_already = [item for item in sent_image_dictionary if item[0] == int(image_number)]
+	if not sent_already:
+		image_chosen = randint(3*(int(image_number)-1),2+(3*(int(image_number)-1)))
+		sent_image_dictionary.append((int(image_number),int(image_chosen)))
+        #	print "#Image = "+str(image_number)+"      "+str(image_chosen)
+	else:
+		image_chosen = sent_already[0][1]
+	#	print "#Image = "+str(image_number)+"      "+str(image_chosen)
+#	print sent_image_dictionary
+        return send_from_directory('./../'+test_images,str(image_chosen)+'.jpg',as_attachment=True)
 
 
 # Store result
 @app.route("/result",methods=['post'])
 def store_result():
+    global result_file
+    global sent_image_dictionary
     token = request.form['token']
     if verify_user_token(token) is None:
         return Response(response='Invalid User', status=200)
     else:
         # Token Verified, Send back images
        	form = cgi.FieldStorage()
-#		fp=self.rfile,
-#		headers=self.headers,environ={'REQUEST_METHOD':'POST',
-#			'CONTENT_TYPE':self.headers['Content-Type'],
-#			})
 	image_name = request.form.getlist("image_name")
 	CLASS_ID = request.form.getlist("CLASS_ID")
 	confidence = request.form.getlist("confidence")
@@ -166,11 +181,12 @@ def store_result():
 	if len(image_name)==len(CLASS_ID)==len(confidence)==len(xmin)==len(ymin)==len(xmax)==len(ymax)>0:
 		s=""
 		for item in range(0,len(ymax)):
-			s=s+(image_name[item] + "," + CLASS_ID[item] + "," + confidence[item] + "," + xmin[item] + "," + ymin[item] + "," + xmax[item] + "," + ymax[item] + "\n")
-			with open('./out.csv','a') as fout:
-				fout.write(s)	
-				fout.close()	
-     		return "Result Stored\n"
+			p=dict(sent_image_dictionary)[int(image_name[item])]	
+			s=s+(str(p) + " " + CLASS_ID[item] + " " + confidence[item] + " " + xmin[item] + " " + ymin[item] + " " + xmax[item] + " " + ymax[item] + "\n")
+		with open('../../'+test_result+'/'+result_file+'.csv','a') as fout:
+			fout.write(s)	
+			fout.close()	
+     		return "Result Stored in ../../"+test_result+"/"+result_file+".csv\n"
 	else:
 		print("Incorrect lines\n")
 		return "Incorrect Lines\n"
@@ -179,6 +195,7 @@ def store_result():
 # Verify user credentials
 def verify_user_entry(a_username,a_password):
     user_entry = User.get(a_username)
+    #result_file = a_username
     if (user_entry is not None):
         user = User(user_entry[0],user_entry[1])
         if (user.password == a_password):
@@ -195,8 +212,6 @@ def verify_user_token(a_token):
         return None
     else:
         return "Valid"
-    
-
 
 # Script usage function
 def usage():
@@ -247,5 +262,3 @@ if __name__ == "__main__":
     # Start server
     app.config["SECRET_KEY"] = server_secret_key
     app.run(host=host_ipaddress, port=int(host_port), debug=mode_debug)
-
-
