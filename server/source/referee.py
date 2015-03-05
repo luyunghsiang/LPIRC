@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 usage_text = """
 LPIRC Referee Server 
 ====================
@@ -32,9 +33,8 @@ Options:
                 Default: images/*.png
 
          --result
-                Test results Directory (Relative to root directory)
-		The results of user John is stored as /result/John.csv
-                Default: result
+                Test results (Relative to root directory)
+                Default: result/result.csv
 
          --debug
                 Run server in debug mode
@@ -45,12 +45,15 @@ Options:
 
 
 Following URLs are recognized, served and issued:
-
+------------------------------------------------
+Assumptions:
+-----------
+1. Image index starts from 1 (not 0).
+2. Command line arguments expect to be within quotes
 
 """
-from random import randint
-import cgi
-import getopt, sys                                                        # Parser for command-line options
+# import cgi
+import getopt, sys, re, glob, os                                          # Parser for command-line options
 from flask import Flask, url_for, send_from_directory, request, Response  # Webserver Microframework
 from flask.ext.login import LoginManager, UserMixin, login_required       # Login manager 
 from itsdangerous import JSONWebSignatureSerializer                       # Token for authentication
@@ -62,16 +65,90 @@ login_manager.init_app(app)
 
 
 
-# Global Variables
+#++++++++++++++++++++++++++++++++ Global Variables +++++++++++++++++++++++++++++++++++
 host_ipaddress = '127.0.0.1'
 host_port = '5000'
-test_images = 'images'
-test_result = 'result'
+test_images_dir_wildcard = 'images/*.png'
+test_result = 'result/result.csv'
 mode_debug = 'True' #'None'
 server_secret_key = 'ITSASECRET'
-result_file = 'result'
-sent_image_dictionary =[]
+total_number_images = 0
 
+#++++++++++++++++++++++++++++++++ URLs +++++++++++++++++++++++++++++++++++++++++++++++
+url_root = '/'
+url_help = '/help'
+url_login = '/login'
+url_get_token = '/get_token'
+url_verify_token = '/verify'
+url_get_image = '/image'
+url_post_result = '/result'
+
+#++++++++++++++++++++++++++++++++ Macros/Form-Fields ++++++++++++++++++++++++++++++++++
+ff_username = 'username'
+ff_password = 'password'
+ff_token = 'token'
+ff_image_index = 'image'
+ff_class_id = 'CLASS_ID'
+ff_confidence = 'confidence'
+ff_bb_xmin = 'xmin'
+ff_bb_xmax = 'xmax'
+ff_bb_ymin = 'ymin'
+ff_bb_ymax = 'ymax'
+
+
+#++++++++++++++++++++++++++++++++ Help URL - Response ++++++++++++++++++++++++++++++++++
+server_help_message = ("""
+Valid URLs:
+            (post/get)     --NA--                            host/
+                                                             Example: curl 127.0.0.1:5000/
+
+            (post/get)     --NA--                            host%s
+                                                             Example: curl 127.0.0.1:5000%s
+
+            (post)      (%s=[user]&%s=[pass])    host%s
+                                                             Example: curl --data "%s=user&%s=pass" 127.0.0.1:5000%s
+
+            (post)      (%s=[token])                      host%s
+                                                             Example: curl --data "%s=daksldjsaldkjlkj32....." 127.0.0.1:5000%s
+
+            (post)      (%s=[token]&%s=[image_index])  host%s (Image index starts with 1: 1,2,3,...)
+                                                             Example: curl --data "%s=daks....&%s=3" 127.0.0.1:5000%s
+
+            (post)      (%s=[token]&%s=[image_index]&..
+                         %s=[id]&%s=[conf]&..
+                         %s=[xmin]&%s=[xmax]&..
+                         %s=[ymin]&%s=[ymax])            host%s
+                                                             Example: curl --data "%s=daks....&%s=3&
+                                                                                   %s=7&%s=0.38&
+                                                                                   %s=123.00&%s=456.00&
+                                                                                   %s=132.00&%s=756.00"     127.0.0.1:5000%s
+
+""" %
+    (url_help, url_help, 
+     ff_username, ff_password, url_login, 
+     ff_username, ff_password, url_login, 
+     ff_token, url_verify_token, 
+     ff_token, url_verify_token, 
+     ff_token, ff_image_index, url_get_image, 
+     ff_token, ff_image_index, url_get_image, 
+     ff_token, ff_image_index, 
+     ff_class_id, ff_confidence, 
+     ff_bb_xmin, ff_bb_xmax, 
+     ff_bb_ymin, ff_bb_ymax, url_post_result, 
+     ff_token, ff_image_index, 
+     ff_class_id, ff_confidence, 
+     ff_bb_xmin, ff_bb_xmax, 
+     ff_bb_ymin, ff_bb_ymax, url_post_result))
+
+
+resp_login_fail = 'Inavlid username or password'
+resp_invalid_token = 'Invalid Token'
+resp_valid_token = 'Valid Token'
+resp_invalid_image_index = 'Invalid Image index'
+resp_image_index_out_of_range = 'Image index out of range'
+resp_image_dir_not_exist = 'Image directory does not exist'
+
+#++++++++++++++++++++++++++++++++ Username/Password Database ++++++++++++++++++++++++++
 # Minimal Flask-Login Example
 # Ref: http://gouthamanbalaraman.com/minimal-flask-login-example.html
 class User(UserMixin):
@@ -90,88 +167,88 @@ class User(UserMixin):
         return cls.user_database.get(id)
 
 
-# Help and Default options
-@app.route("/",methods=['post','get'])
-@app.route("/help",methods=['post','get'])
-def server_help():
-    server_help_message = """
-    Valid URLs:
-        host/
-        host/help
-        (Post) host/login [username&password] example: username=user&password=pass
-        (Post) host/verify [token] example: token=daksldjsaldkjlkj32.....
-        (get/Post) host/image/?image=[#Image]  [token]  example: token=lsadkjsldj... host/image/?image=10
-        (Post) host/result [token&image_name&CLASS_ID&confidence&xmin&xmax&ymin&ymax&...]  example: token=daksldjsaldkjlkj32.....&image_name=picase&CLASS_ID=2&confidence=.3&xmin=123&ymin=132&xmax=456&ymax=450... [note: n complete lines can be added in single post. To make n entries, 7n+1 form values]
 
-    """
+#++++++++++++++++++++++++++++++++ Root url - Response +++++++++++++++++++++++++++++++++++
+# Help and Default options
+@app.route(url_root,methods=['post','get'])
+@app.route(url_help,methods=['post','get'])
+def server_help():
     return Response(response=server_help_message, status=200)
 
 
+#++++++++++++++++++++++++++++++++ login url - Response +++++++++++++++++++++++++++++++++++
 # Login function
-@app.route('/login', methods=['post','get'])
-@app.route('/get_token', methods=['post','get'])
+@app.route(url_login, methods=['post','get'])
+@app.route(url_get_token, methods=['post','get'])
 def login_check():
-    global result_file
-    global sent_image_dictionary
-    sent_image_dictionary	 = []
-    rx_username = request.form['username']
-    rx_password = request.form['password']
+    rx_username = request.form[ff_username]
+    rx_password = request.form[ff_password]
     # Validate username and password
     if verify_user_entry(rx_username,rx_password) is None:
-        return Response(response='Incorrect username or password', status=200)
+        return Response(response=resp_login_fail, status=200)
     else:
-	result_file = rx_username
         # Generate Token
         s = JSONWebSignatureSerializer(server_secret_key)
-        token = s.dumps({'username': rx_username, 'password' : rx_password})
+        token = s.dumps({ff_username: rx_username, ff_password : rx_password})
         return Response(response=token, status=200)
 
 
+#++++++++++++++++++++++++++++++++ Verify Token url - Response +++++++++++++++++++++++++++++
 # Verify Token
-@app.route("/verify",methods=['post','get'])
+@app.route(url_verify_token,methods=['post','get'])
 def token_check():
-    token = request.form['token']
+    token = request.form[ff_token]
     if verify_user_token(token) is None:
-        return Response(response='Invalid', status=200)
+        return Response(response=resp_invalid_token, status=200)
     else:
-        return Response(response='Valid', status=200)
+        return Response(response=resp_valid_token, status=200)
 
 
+#++++++++++++++++++++++++++++++++ Send Image url - Response ++++++++++++++++++++++++++++++++
 # Send Images
-@app.route("/image/",methods=['post','get'])
+@app.route(url_get_image,methods=['post','get'])
 def send_image():
-    global test_images
-    global sent_image_dictionary
-    token = request.form['token']
+    token = request.form[ff_token]
     if verify_user_token(token) is None:
-        return Response(response='Invalid User', status=200)
+        return Response(response=resp_invalid_token, status=200)
     else:
         # Token Verified, Send back images
-        image_number = request.args.get('image')
-	sent_already = [item for item in sent_image_dictionary if item[0] == int(image_number)]
-	if not sent_already:
-		image_chosen = randint(3*(int(image_number)-1),2+(3*(int(image_number)-1)))
-		sent_image_dictionary.append((int(image_number),int(image_chosen)))
-        #	print "#Image = "+str(image_number)+"      "+str(image_chosen)
-	else:
-		image_chosen = sent_already[0][1]
-	#	print "#Image = "+str(image_number)+"      "+str(image_chosen)
-#	print sent_image_dictionary
-        return send_from_directory('./../'+test_images,str(image_chosen)+'.jpg',as_attachment=True)
+        image_index_str = request.form[ff_image_index]
+        match = re.search("[^0-9]", image_index_str)
+        if match:
+            return Response(response=resp_invalid_image_index, status=200)
+
+        image_index = int(image_index_str)
+        if (image_index <= 0) or (image_index > total_number_images):
+            return Response(response=resp_image_index_out_of_range, status=200)
+            
+        # Assuming image index starts with 1. example: 1,2,3,....
+        image_index -= 1
+
+        # List all images in directory
+        list_of_images = glob.glob(test_images_dir_wildcard)
+        # Flask send file expects split directory arguments
+        split_path_image = os.path.split(list_of_images[image_index])
+
+        return send_from_directory(split_path_image[0], split_path_image[1], as_attachment=True)        
 
 
+
+#++++++++++++++++++++++++++++++++ Log results url - Response ++++++++++++++++++++++++++++++++
 # Store result
 @app.route("/result",methods=['post'])
 def store_result():
-    global result_file
-    global sent_image_dictionary
     token = request.form['token']
     if verify_user_token(token) is None:
         return Response(response='Invalid User', status=200)
     else:
-        # Token Verified, Send back images
-       	form = cgi.FieldStorage()
-	image_name = request.form.getlist("image_name")
+        # Token Verified, Store results
+#        	form = cgi.FieldStorage()
+# #		fp=self.rfile,
+# #		headers=self.headers,environ={'REQUEST_METHOD':'POST',
+# #			'CONTENT_TYPE':self.headers['Content-Type'],
+# #			})
+        image_name = request.form.getlist("image_name")
 	CLASS_ID = request.form.getlist("CLASS_ID")
 	confidence = request.form.getlist("confidence")
 	xmin = request.form.getlist("xmin")
@@ -181,21 +258,20 @@ def store_result():
 	if len(image_name)==len(CLASS_ID)==len(confidence)==len(xmin)==len(ymin)==len(xmax)==len(ymax)>0:
 		s=""
 		for item in range(0,len(ymax)):
-			p=dict(sent_image_dictionary)[int(image_name[item])]	
-			s=s+(str(p) + " " + CLASS_ID[item] + " " + confidence[item] + " " + xmin[item] + " " + ymin[item] + " " + xmax[item] + " " + ymax[item] + "\n")
-		with open('../../'+test_result+'/'+result_file+'.csv','a') as fout:
-			fout.write(s)	
-			fout.close()	
-     		return "Result Stored in ../../"+test_result+"/"+result_file+".csv\n"
+			s=s+(image_name[item] + "," + CLASS_ID[item] + "," + confidence[item] + "," + xmin[item] + "," + ymin[item] + "," + xmax[item] + "," + ymax[item] + "\n")
+			with open('./out.csv','a') as fout:
+				fout.write(s)	
+				fout.close()	
+     		return "Result Stored\n"
 	else:
 		print("Incorrect lines\n")
 		return "Incorrect Lines\n"
 
 
+#++++++++++++++++++++++++++++++++ Internal Functions +++++++++++++++++++++++++++++++++++
 # Verify user credentials
 def verify_user_entry(a_username,a_password):
     user_entry = User.get(a_username)
-    #result_file = a_username
     if (user_entry is not None):
         user = User(user_entry[0],user_entry[1])
         if (user.password == a_password):
@@ -212,17 +288,39 @@ def verify_user_token(a_token):
         return None
     else:
         return "Valid"
+    
 
 # Script usage function
 def usage():
     print usage_text
 
+# Initialize global variables
+def init_global_vars():
+
+    global test_images_dir_wildcard   # eg ../../data/images/*.jpg
+    global total_number_images
+
+    image_wildcard = os.path.basename(test_images_dir_wildcard)
+    image_dirname = os.path.dirname(test_images_dir_wildcard)
+
+    # Check if basename contains wildcard
+    if re.search('[\*\.]', image_wildcard) == None:     # Still Folder name or empty
+        assert os.path.exists(test_images_dir_wildcard), test_images_dir_wildcard+'--'+resp_image_dir_not_exist
+        test_images_dir_wildcard = os.path.join(test_images_dir_wildcard, '*.*')
+        
+    total_number_images = len(glob.glob(test_images_dir_wildcard))
+    print "Found %d test images in %s \n" % (total_number_images, test_images_dir_wildcard)
+    return
+
+
+
+#++++++++++++++++++++++++++++++++ Parse Command-line Input +++++++++++++++++++++++++++++++
 # Main function to parse command-line input and run server
 def parse_cmd_line():
 
     global host_ipaddress
     global host_port
-    global test_images
+    global test_images_dir_wildcard
     global test_result
     global mode_debug
     global server_secret_key
@@ -243,7 +341,7 @@ def parse_cmd_line():
         elif switch in ("-p", "--port"):
             host_port = val
         elif switch == "--images":
-            test_images = val
+            test_images_dir_wildcard = val
         elif switch == "--result":
             test_result = val
         elif switch == "--debug":
@@ -253,12 +351,19 @@ def parse_cmd_line():
         else:
             assert False, "unhandled option"
 
-    print "\nhost = "+host_ipaddress+":"+host_port+"\nTest Images = "+test_images+"\nTest Result = "+test_result+"\nDebug Mode  = "+mode_debug 
+    print "\nhost = "+host_ipaddress+":"+host_port+"\nTest Images = "+test_images_dir_wildcard+"\nTest Result = "+test_result+"\nDebug Mode  = "+mode_debug 
 
 
+
+
+#++++++++++++++++++++++++++++++++ Script enters here at beginning +++++++++++++++++++++++++++++++++++
 if __name__ == "__main__":
     # Parse Command-line
     parse_cmd_line()
+    # Initialize global variables
+    init_global_vars()
     # Start server
     app.config["SECRET_KEY"] = server_secret_key
     app.run(host=host_ipaddress, port=int(host_port), debug=mode_debug)
+
+
