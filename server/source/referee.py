@@ -30,11 +30,11 @@ Options:
 
          --images
                 Test images (Relative to root directory)
-                Default: images/*.png
+                Default: images/ILSRVC2012_val/*.JPEG
 
          --result
                 Test results (Relative to root directory)
-                Default: result/result.csv
+                Default: result
 
          --debug
                 Run server in debug mode
@@ -52,7 +52,8 @@ Assumptions:
 2. Command line arguments expect to be within quotes
 
 """
-# import cgi
+import cgi
+from random import randint
 import getopt, sys, re, glob, os                                          # Parser for command-line options
 from flask import Flask, url_for, send_from_directory, request, Response  # Webserver Microframework
 from flask.ext.login import LoginManager, UserMixin, login_required       # Login manager 
@@ -68,19 +69,20 @@ login_manager.init_app(app)
 #++++++++++++++++++++++++++++++++ Global Variables +++++++++++++++++++++++++++++++++++
 host_ipaddress = '127.0.0.1'
 host_port = '5000'
-test_images_dir_wildcard = 'images/*.png'
-test_result = 'result/result.csv'
+test_images_dir_wildcard = '../images/ILSRVC2012_val/*.JPEG'
+test_result = 'result'
 mode_debug = 'True' #'None'
 server_secret_key = 'ITSASECRET'
 total_number_images = 0
-
+sent_image_dictionary = []
+flag = 0
 #++++++++++++++++++++++++++++++++ URLs +++++++++++++++++++++++++++++++++++++++++++++++
 url_root = '/'
 url_help = '/help'
 url_login = '/login'
 url_get_token = '/get_token'
 url_verify_token = '/verify'
-url_get_image = '/image'
+url_get_image = '/image/'
 url_post_result = '/result'
 
 #++++++++++++++++++++++++++++++++ Macros/Form-Fields ++++++++++++++++++++++++++++++++++
@@ -181,12 +183,16 @@ def server_help():
 @app.route(url_login, methods=['post','get'])
 @app.route(url_get_token, methods=['post','get'])
 def login_check():
+    global sent_image_dictionary
+    global result_file
+    sent_image_dictionary = []
     rx_username = request.form[ff_username]
     rx_password = request.form[ff_password]
     # Validate username and password
     if verify_user_entry(rx_username,rx_password) is None:
         return Response(response=resp_login_fail, status=200)
     else:
+        result_file = rx_username
         # Generate Token
         s = JSONWebSignatureSerializer(server_secret_key)
         token = s.dumps({ff_username: rx_username, ff_password : rx_password})
@@ -208,28 +214,34 @@ def token_check():
 # Send Images
 @app.route(url_get_image,methods=['post','get'])
 def send_image():
+    global sent_image_dictionary
+    global flag
+    global list_of_images
     token = request.form[ff_token]
     if verify_user_token(token) is None:
         return Response(response=resp_invalid_token, status=200)
     else:
+        if flag==0:
+            # List all images in directory
+            list_of_images = glob.glob(test_images_dir_wildcard)
+            flag=1
         # Token Verified, Send back images
-        image_index_str = request.form[ff_image_index]
+        image_index_str = request.args.get('image')
         match = re.search("[^0-9]", image_index_str)
         if match:
             return Response(response=resp_invalid_image_index, status=200)
-
         image_index = int(image_index_str)
         if (image_index <= 0) or (image_index > total_number_images):
             return Response(response=resp_image_index_out_of_range, status=200)
-            
         # Assuming image index starts with 1. example: 1,2,3,....
-        image_index -= 1
-
-        # List all images in directory
-        list_of_images = glob.glob(test_images_dir_wildcard)
+        sent_already = [item for item in sent_image_dictionary if item[0] == image_index]
+        if not sent_already:
+            image_chosen = 1+randint(3*(image_index-1),2+(3*(image_index-1)))
+            sent_image_dictionary.append((image_index,image_chosen))
+        else:
+            image_chosen = sent_already[0][1]
         # Flask send file expects split directory arguments
-        split_path_image = os.path.split(list_of_images[image_index])
-
+        split_path_image = os.path.split(list_of_images[image_chosen])
         return send_from_directory(split_path_image[0], split_path_image[1], as_attachment=True)        
 
 
@@ -238,16 +250,14 @@ def send_image():
 # Store result
 @app.route("/result",methods=['post'])
 def store_result():
+    global result_file
+    global sent_image_dictionary
     token = request.form['token']
     if verify_user_token(token) is None:
         return Response(response='Invalid User', status=200)
     else:
         # Token Verified, Store results
-#        	form = cgi.FieldStorage()
-# #		fp=self.rfile,
-# #		headers=self.headers,environ={'REQUEST_METHOD':'POST',
-# #			'CONTENT_TYPE':self.headers['Content-Type'],
-# #			})
+        form = cgi.FieldStorage()
         image_name = request.form.getlist("image_name")
 	CLASS_ID = request.form.getlist("CLASS_ID")
 	confidence = request.form.getlist("confidence")
@@ -255,17 +265,21 @@ def store_result():
 	ymin = request.form.getlist("ymin")
 	xmax = request.form.getlist("xmax")
 	ymax = request.form.getlist("ymax")
-	if len(image_name)==len(CLASS_ID)==len(confidence)==len(xmin)==len(ymin)==len(xmax)==len(ymax)>0:
-		s=""
-		for item in range(0,len(ymax)):
-			s=s+(image_name[item] + "," + CLASS_ID[item] + "," + confidence[item] + "," + xmin[item] + "," + ymin[item] + "," + xmax[item] + "," + ymax[item] + "\n")
-			with open('./out.csv','a') as fout:
-				fout.write(s)	
-				fout.close()	
-     		return "Result Stored\n"
-	else:
-		print("Incorrect lines\n")
-		return "Incorrect Lines\n"
+    if len(image_name)==len(CLASS_ID)==len(confidence)==len(xmin)==len(ymin)==len(xmax)==len(ymax)>0:
+        s=""
+        for item in range(0,len(ymax)):
+            if int(image_name[item]) in dict(sent_image_dictionary):
+                p=dict(sent_image_dictionary)[int(image_name[item])]    
+                s=s+(str(p) + " " + CLASS_ID[item] + " " + confidence[item] + " " + xmin[item] + " " + ymin[item] + " " + xmax[item] + " " + ymax[item] + "\n")
+            else:
+                print "Image " + image_name[item] + " not requested yet"
+        with open('../../'+test_result+'/'+result_file+'.txt','a') as fout:
+            fout.write(s)   
+            fout.close()    
+            return "Result Stored in ../../"+test_result+"/"+result_file+".txt\n"
+    else:
+        print("Incorrect lines\n")
+        return "Incorrect Lines\n"
 
 
 #++++++++++++++++++++++++++++++++ Internal Functions +++++++++++++++++++++++++++++++++++

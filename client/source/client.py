@@ -34,10 +34,20 @@ Options:
                 Password for the username
                 Default: pass
 		
-	 --dir
+	      --dir
 		Directory with respect to the client directory 
                 where received images are stored
 		Default: images
+
+          --in
+		Name of the golden csv file to take the input w.r.t. source directory
+		Default: golden_output.csv
+
+
+        --score
+		Score that you want to have. The client curropts 
+		the golden input with probability (100 - score)/100.
+		Default: 100
 
          -h, --help
                 Displays all the available option
@@ -64,6 +74,7 @@ level = 0
 columns = defaultdict(list)
 lines=""
 def get_lines (no_of_lines):
+	global score
 	global level
 	global lines
 	if (level+no_of_lines>len(columns[0]) and level<len(columns[0])):
@@ -73,8 +84,6 @@ def get_lines (no_of_lines):
 	elif (level+no_of_lines<=len(columns[0])):
 		lines = {'image_name':columns[0][level:level+no_of_lines],'CLASS_ID':columns[1][level:level+no_of_lines],'confidence':columns[2][level:level+no_of_lines],'xmin':columns[3][level:level+no_of_lines],'ymin':columns[4][level:level+no_of_lines],'xmax':columns[5][level:level+no_of_lines],'ymax':columns[6][level:level+no_of_lines]}
 		level = level + no_of_lines
-
-
 
 
 def get_image(token, number):
@@ -94,8 +103,8 @@ def post_result(token, data):
 	c.setopt(c.URL, host_ipaddress+':'+host_port+'/result')
 	post_data = {'token':token}
 	postfields = urlencode(post_data)+'&'+urlencode(data,True)
-	#print postfields
-	#print
+#	print postfields
+#	print
 	c.setopt(c.POSTFIELDS,postfields)
    	c.perform()
     	c.close()
@@ -110,6 +119,16 @@ def read_csv(csv_filename):
 				columns[i].append(v)
 	level = len(columns[0])
 
+def corrupt_csv ():
+	no_of_lines = len(columns[0])
+	global score
+	global level
+	global lines
+	rand = randint(1,100)
+	if (rand >= score):
+		print "Wrong entry\n"
+		columns[1][0:no_of_lines]=[str(int(x)+5) for x in columns[1][0:no_of_lines]] # adding class number by 5 to corrupt the line
+
 # Script usage function
 def usage():
     print usage_text
@@ -119,12 +138,13 @@ def parse_cmd_line():
 
     global host_ipaddress
     global host_port
+    global score
     global username
     global password
     global csv_filename
     global image_directory
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "port=", "user=", "pass=", "in=", "dir="])
+        opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "port=", "user=", "pass=", "in=", "dir=", "score="])
     except getopt.GetoptError as err:
         print str(err) 
         usage()
@@ -145,6 +165,8 @@ def parse_cmd_line():
 	    csv_filename = val
 	elif switch == "--dir":
 	    image_directory = val
+	elif switch in ("-s","--score"):
+	    score = int(val)
         else:
             assert False, "unhandled option"
 
@@ -155,6 +177,7 @@ def parse_cmd_line():
 host_ipaddress = '127.0.0.1'
 host_port = '5000'
 password = 'pass'
+score = 100
 username = 'lpirc'
 csv_filename = 'golden_output.csv'
 image_directory = 'images'
@@ -177,25 +200,15 @@ token = buffer.getvalue()
 #print(token)
 
 
-
-
-for w in range (1,2):
-
-	get_image(token,1)
-	get_image(token,2)
-	get_image(token,3)
-	get_image(token,4)
-	get_image(token,2)
-	get_image(token,3)
-
 read_csv(csv_filename)
-get_lines(1)
-post_result(token,lines)
+corrupt_csv()
 
-get_lines(2)
-post_result(token,lines)
-
-get_lines(3)
-post_result(token,lines)
-
+for w in range (1,9,3):
+	get_image(token,w)
+	get_image(token,w+1)
+	get_image(token,w+2)
+	get_lines(1)
+	post_result(token,lines)
+	get_lines(2)
+	post_result(token,lines)
 
