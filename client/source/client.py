@@ -103,8 +103,6 @@ def post_result(token, data):
 	c.setopt(c.URL, host_ipaddress+':'+host_port+'/result')
 	post_data = {'token':token}
 	postfields = urlencode(post_data)+'&'+urlencode(data,True)
-#	print postfields
-#	print
 	c.setopt(c.POSTFIELDS,postfields)
    	c.perform()
     	c.close()
@@ -124,10 +122,10 @@ def corrupt_csv ():
 	global score
 	global level
 	global lines
-	rand = randint(1,100)
-	if (rand >= score):
-		print "Wrong entry\n"
-		columns[1][0:no_of_lines]=[str(int(x)+5) for x in columns[1][0:no_of_lines]] # adding class number by 5 to corrupt the line
+	for w in range(0,no_of_lines):
+		rand = randint(1,100)
+		if (rand >= score):
+			columns[1][w]=str(int(columns[1][w])+5) # adding class number by 5 to corrupt the line
 
 # Script usage function
 def usage():
@@ -203,10 +201,11 @@ token = buffer.getvalue()
 read_csv(csv_filename)
 corrupt_csv()
 
-for w in range (1,9,3):
+for w in range (1,10,3):
 	get_image(token,w)
 	get_image(token,w+1)
 	get_image(token,w+2)
+	get_image(token,w+3)
 	get_lines(1)
 	post_result(token,lines)
 	get_lines(2)

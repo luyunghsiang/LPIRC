@@ -76,6 +76,7 @@ server_secret_key = 'ITSASECRET'
 total_number_images = 0
 sent_image_dictionary = []
 flag = 0
+bin_size=3
 #++++++++++++++++++++++++++++++++ URLs +++++++++++++++++++++++++++++++++++++++++++++++
 url_root = '/'
 url_help = '/help'
@@ -216,6 +217,7 @@ def token_check():
 def send_image():
     global sent_image_dictionary
     global flag
+    global bin_size
     global list_of_images
     token = request.form[ff_token]
     if verify_user_token(token) is None:
@@ -236,7 +238,7 @@ def send_image():
         # Assuming image index starts with 1. example: 1,2,3,....
         sent_already = [item for item in sent_image_dictionary if item[0] == image_index]
         if not sent_already:
-            image_chosen = 1+randint(3*(image_index-1),2+(3*(image_index-1)))
+            image_chosen = 1+randint(bin_size*(image_index-1),bin_size-1+(bin_size*(image_index-1)))
             sent_image_dictionary.append((image_index,image_chosen))
         else:
             image_chosen = sent_already[0][1]
@@ -340,7 +342,7 @@ def parse_cmd_line():
     global server_secret_key
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "port=", "images=", "result=", "debug", "secret="])
+        opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "bin=","port=", "images=", "result=", "debug", "secret="])
     except getopt.GetoptError as err:
         # print help information and exit:
         print str(err) 
@@ -354,6 +356,8 @@ def parse_cmd_line():
             host_ipaddress = val
         elif switch in ("-p", "--port"):
             host_port = val
+        elif switch =="--bin":
+            bin_size = val
         elif switch == "--images":
             test_images_dir_wildcard = val
         elif switch == "--result":
