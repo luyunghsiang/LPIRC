@@ -1,18 +1,29 @@
 usage_text = """
 LPIRC Client 
+This is a sample client for illustration purpose only.
+This sample client is written in python but a client program can be written in any language, as long as it can communicate using HTTP GET and POST.
+
 ====================
 @2015 - HELPS, Purdue University
 
 Main Tasks:
 -----------
-1. Login to the Server and store the token generated.
-2. Requests for images from server and stores them in directory.
-3. POSTS multiple result lines to the server in the form of result.
+1. Login to the Server and store the token from the server.
+2. Request images from the server and store the images in a directory.
+3. Send POST messages to the server as the results.
+4. Request total number of valid images from server.
+
+Rules:
+1. If a single image has multiple bounding boxes, the client can send the bounding boxes in the same POST message.
+2. The client may send multiple POST messages for different bounding boxes of the same image.
+3. Two different images need to be sent in the different POST messages.
+4. The POST messages for different images may be out of order (for example, the bounding boxes for image 5 may be sent before the bounding boxes for image 3)
+
 
 Requirements:
 -------------
 1. Python v2.7.3
-2. PycURL
+2. PycURL (To support HTTP)
 
 Usage:
 ------
@@ -34,20 +45,26 @@ Options:
                 Password for the username
                 Default: pass
 		
-         --dir
-		Directory with respect to the client directory 
+         --im_dir
+		Directory with respect to the client (local) directory 
                 where received images are stored
 		Default: images
 
-         --in
-		Name of the golden csv file to take the input w.r.t. source directory
-		Default: golden_output.csv
+	 --temp_dir
+		Directory with respect to the client (local) directory
+		where temporary data is stored
+		Default: temp
 
+         --in
+		Name of the csv file to take the input with respect to source directory
+		Default: golden_output.csv
+		(This is for testing purpose only. It should not be in the real client.)
 
          --score
-		Score that you want to have. The client curropts 
+		Score that you want to have. The client corrupts 
 		the golden input with probability (100 - score)/100.
 		Default: 100
+		(This is for testing purpose only. It should not be in the real client.)
 
          -h, --help
                 Displays all the available option
@@ -57,9 +74,9 @@ Options:
 
 from random import randint
 import pycurl
-import csv
+import csv,shutil,os
 from collections import defaultdict
-import getopt,sys
+import getopt,sys, time
 try:
     # python 3
     from urllib.parse import urlencode
@@ -76,13 +93,17 @@ lines=""
 
 
 
-#++++++++++++++++++++++++++++ get_token: Can be used by the participant directly ++++++++++++++++++++++++++++++++++
+#++++++++++++++++++++++++++++ get_token: Can be used by the participant directly ++++++++++++++++++++
 # 
 # Functionality : 
-# Sends request to the server to log in with username and password and returns the token. 
-# token needs to be used in all the communication with the server in the session. 
+# Sends request to the server to log in with username and password and returns the token and status. 
+# Token needs to be used in all the communication with the server in the session.
+# If the username and password are invalid or the session has expired, status returned is 0.
+# If the token is is valid, status returned is 1.
 # 
-# Usage: token = get_token(username, password)
+# This must be the first message to the server.
+#
+# Usage: [token, status] = get_token(username, password)
 # 
 # Inputs: 
 #         1. username
@@ -90,8 +111,9 @@ lines=""
 #
 # Outputs:
 #         1. token
+#	  2. status
 #
-#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 def get_token (username,password):
 
 	buffer = StringIO()
@@ -102,65 +124,98 @@ def get_token (username,password):
 	c.setopt(c.POSTFIELDS,postfields)
 	c.setopt(c.WRITEFUNCTION, buffer.write)
 	c.perform()
+	status = c.getinfo(pycurl.HTTP_CODE)
 	c.close()
-	return buffer.getvalue()
+	if status == 200:
+		return [buffer.getvalue(),1]
+	else:
+		print "Unauthorised Access\n"
+		return [buffer.getvalue(),0]
 
 
 #++++++++++++++++++++++++++++ get_image: Can be used by the participant directly ++++++++++++++++++++++++++++++++++
 # 
 # Functionality : 
-# Sends request to the server for an image with its token number and the image number 
-# 
-# Usage: get_image(token, number)
-# 
+# Sends request to the server for an image with its token number and the image number.
+# 'status' is 1 if the image transfer succeeded. If the transfer failed, 'status' will be set to 0. 
+# Transfer can fail because of two reasons:-
+# 1. The image_number request is out of the valid range [1,total_image_number] (inclusive)
+# 2. The token is not valid.
+#
+# Usage: status = get_image(token, image_number) 
+# Total number of images can be queried from server using get_no_of_images(token).
+# If image number is outside the permitted range, penalty will be assigned. 
+#
 # Inputs: 
 #         1. token : Obtained from Log in ( get_token() )
 #         2. image_number : Index of image client needs.
+#
+# Output:
+#	  1. status  
+#
+# Note:
+#         The image is buffered in the temp_directory. If the POST message succeeds, 
+#         the file is moved to the image_directory. 
+#	  This movement can be avoided by buffering the file to image_directory and removing the same if HTTP status is not 200 (OK). 
 #
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 def get_image(token, image_number):
 	global image_directory
+	global temp_directory
 	c = pycurl.Curl()
-	c.setopt(c.URL, host_ipaddress+':'+host_port+'/image/?image='+str(image_number))
-	post_data = {'token':token}
+	c.setopt(c.URL, host_ipaddress+':'+host_port+'/image')#/?image='+str(image_number))
+	post_data = {'token':token, 'image':str(image_number)}
 	postfields = urlencode(post_data)
 	c.setopt(c.POSTFIELDS,postfields)
-	with open('../'+image_directory+'/'+str(image_number)+'.jpg', 'w') as f:
+	# Image will be saved as a file
+	with open('../'+temp_directory+'/'+str(image_number)+'.jpg', 'w') as f:
     		c.setopt(c.WRITEDATA, f)
-    		c.perform()
-    		c.close()
+		c.perform()
+		status = c.getinfo(pycurl.HTTP_CODE)
+		c.close()
+	if status == 200:
+		# Server replied OK so, copy the image from temp_directory to image_directory
+		shutil.copyfile('../'+temp_directory+'/'+str(image_number)+'.jpg','../'+image_directory+'/'+str(image_number)+'.jpg')
+		os.remove('../'+temp_directory+'/'+str(image_number)+'.jpg')
+		return 1
+	elif status == 401:
+		# Server replied 401, Unauthorized Access, remove the temporary file
+		os.remove('../'+temp_directory+'/'+str(image_number)+'.jpg')
+		print "Invalid Token\n"
+		return 0
+	else:
+		# Server replied 406, Not Acceptable, remove the temporary file
+		os.remove('../'+temp_directory+'/'+str(image_number)+'.jpg')
+		print "The image number is not Acceptable\n" 
+		return 0
 
 #++++++++++++++++++++++++++++ post_result: Can be used by the participant directly ++++++++++++++++++++++++++++++++++
 # 
 # Functionality : 
-# Posts the bounding box information corresponding to an image back to the server. 
+# POSTS the bounding box information corresponding to an image back to the server. If the POST message to the server 
+# succeeded, status = 1. If the POST message to the server failed, the status is set as 0.
+# The POST message can fail because of 2 reasons:-
+# 1. The token is not valid
+# 2. The format of 'data' is incorrect
+#
+# Usage: post_result(token, data)
 # 
-# Usage: get_image(token, data)
-# 
-# Inputs: 
+# Inputs:
 #         1. token: Obtained from Log in
-#         2. data : data is a dictionary which stores multiple bounding box information lines.
-#                   Bounding box information line consists of 7 parameters:
-#		    a. image_name: Image index 
-#		    b. CLASS_ID: 
-#		    c. confidence
-#		    d. ymax
-#		    e. xmax
-#		    f. xmin
-#		    g. ymin
-#		    
-#		    data is a dictionary with:
+#         2. data :
+#		    data is a dictionary container with:
 #			key:     'image_name', 'CLASS_ID', 'confidence', 'ymax', 'xmax', 'xmin', 'ymin'
 #			values:  list of values corresponding to the keys
 #
-#		    Eg: data for 2 lines of images 1 and 2 resp. would be:-
+#		    Eg: data for 2 bounding boxes of images 1 could be:-
 #
-#			data = {'image_name': ['1', '2'], 'CLASS_ID': ['58', '10'],'confidence': ['0.529047', '0.184961'],
+#			data = {'image_name': ['1', '1'], 'CLASS_ID': ['58', '10'],'confidence': ['0.529047', '0.184961'],
 #				'ymax': ['271.055408', '225.339863'],  'xmax': ['351.519712', '194.408771'],
 #				'xmin': ['291.439033', '184.804591'], 'ymin': ['237.148035', '212.047943']}
 #                   
-#			The first value corresponds to image 1 and second value to image 2.
+# Outputs:
+#	  1. status
 #
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -171,10 +226,60 @@ def post_result(token, data):
 	postfields = urlencode(post_data)+'&'+urlencode(data,True)
 	c.setopt(c.POSTFIELDS,postfields)
    	c.perform()
-    	c.close()
+	status = c.getinfo(pycurl.HTTP_CODE)
+	c.close()
+	if status == 200:
+		# Server replied 200, OK, Result stored
+		return 1
+	elif (status == 401):
+		# Server replied 401, Unauthorized Access
+		print "Unauthorized Access\n"
+		return 0
+	else:
+		# Server replied 406, In correct format of 'data'
+		print "Not Acceptable. Incorrect Format of result data\n"
+		return 0
+
+#++++++++++++++++++++++++++++ get number of images: Can be used by the participant directly ++++++++++++++++++++++++++++++++++
+# Functionality : 
+# POSTS the message to the server and gets back the total number of images.
+# If the server sends back OK status (200), status=1 and 'number_of_images' is valid
+# If the server sends Unauthorized Access (401), status=0 and 'number_of_images' is invalid.
+# 
+# Usage: no_of_images = get_no_of_images(token)
+# 
+# Inputs:
+#         1. token: Obtained from Log in
+#
+# Output:
+#         1. number_of_images
+#         2. status
+#
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+def get_no_of_images(token):
+	buffer = StringIO()
+	c = pycurl.Curl()
+	c.setopt(c.URL, host_ipaddress+':'+host_port+'/no_of_images')
+	post_data = {'token':token}
+	postfields = urlencode(post_data)
+	c.setopt(c.POSTFIELDS,postfields)
+   	c.setopt(c.WRITEFUNCTION, buffer.write)
+	c.perform()
+    	status = c.getinfo(pycurl.HTTP_CODE)
+	c.close()
+	if status == 200:
+		return [buffer.getvalue(), 1]
+	else:
+		return [buffer.getvalue(), 0]
+
+
+
+# The following functions are for testing purpose only. They should not be in the actual client.
 
 #++++++++++++++++++++++++++++ get_lines: Internal Function ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# 
+#
+#
 # Functionality : 
 # Pops bounding box lines from the directory and returns 
 # 
@@ -199,7 +304,8 @@ def get_lines (no_of_lines):
 
 
 #++++++++++++++++++++++++++++ read_csv: Internal Function ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# 
+# This function simulates a recognition program. It should be replaced.  
+#
 # Functionality : 
 # 
 # Reads a file with the results in the form separated with a space and generates database.
@@ -225,18 +331,20 @@ def read_csv(csv_filename):
 				columns[i].append(v)
 	level = len(columns[0])
 
-#++++++++++++++++++++++++++++ corrupt_csv: Internal Function ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# 
+#++++++++++++++++++++++++++++ simulate_score: Internal Function ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#
+# This function simulates recognition of different scores.
+#
 # Functionality : 
 # Corrupts the database: It changes the CLASS_ID field of a line randomly picked with probability (1 - score/100)
 # 
-# Usage: corrupt_csv(score)
+# Usage: simulate_score(score)
 # 
 # Inputs: 
 #         1. score: Score [0,100] which needs to be obtained.
 #
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-def corrupt_csv (score):
+def simulate_score (score):
 	no_of_lines = len(columns[0])
 	global level
 	global lines
@@ -244,8 +352,6 @@ def corrupt_csv (score):
 		rand = randint(1,100)
 		if (rand >= score):
 			columns[1][w]=str(int(columns[1][w])+5) # adding class number by 5 to corrupt the line
-
-
 
 
 #+++++++++++++++++++++++++++ Script usage function +++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -262,6 +368,7 @@ def parse_cmd_line():
     global password
     global csv_filename
     global image_directory
+    global temp_directory
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "port=", "user=", "pass=", "in=", "dir=", "score="])
     except getopt.GetoptError as err:
@@ -282,8 +389,10 @@ def parse_cmd_line():
             password = val
 	elif switch in ("-i","--in"):
 	    csv_filename = val
-	elif switch == "--dir":
+	elif switch == "--im_dir":
 	    image_directory = val
+	elif switch == "--temp_dir":
+	    temp_directory = val
 	elif switch in ("-s","--score"):
 	    score = int(val)
         else:
@@ -300,22 +409,44 @@ score = 100
 username = 'lpirc'
 csv_filename = 'golden_output.csv'
 image_directory = 'images'
-
+temp_directory = 'temp'
 
 #+++++++++++++++++++++++++++ Start of the script +++++++++++++++++++++++++++++++++++++++++++++++
 parse_cmd_line()
 
-token = get_token(username,password)   # Login to server and obtain token
+[token, status] = get_token(username,password)   # Login to server and obtain token
+if status==0:
+	print "Incorrect Username and Password. Bye!"
+	sys.exit()
 read_csv(csv_filename)                 # Read the csv file to obtain the data
-corrupt_csv(score)                     # Corrupt the database read to obtain a score of 'score'
-
-for w in range (1,10,3):
-	get_image(token,w)             # get image in the assigned directory with index 'w'
-	get_image(token,w+1)
-	get_image(token,w+2)
-	get_image(token,w+3)
-	lines = get_lines(1)           # pop 1 line from the data base and store it in 'lines'
-	post_result(token,lines)       # post 'lines' to the server along with the token
-	lines = get_lines(2)
-	post_result(token,lines)
+simulate_score(score)                     # Corrupt the databaseread to obtain a score of 'score'
+[no_of_images, status] = get_no_of_images(token)
+if status==0:
+	print "Token, Incorrect or Expired. Bye!"
+	sys.exit()
+# This is for illustration purpose
+for w in range (1,12,4):
+	if get_image(token,w)==0:             # get image in the assigned directory with index 'w'
+		print "Get Image Failed, Exiting, Bye!"
+		sys.exit()
+	if get_image(token,w+1)==0:
+		print "Get Image Failed, Exiting, Bye!"
+		sys.exit()
+	#time.sleep(1)
+	if get_image(token,w+2)==0:
+		print "Get Image Failed, Exiting, Bye!"
+		sys.exit()
+	if get_image(token,w+3)==0:
+		print "Get Image Failed, Exiting, Bye!"
+		sys.exit()
+	line = get_lines(5)
+	if post_result(token,line)==0:
+		print "Get Image Failed, Exiting, Bye!"
+		sys.exit()
+	#time.sleep(1);
+	line = get_lines(5)
+	if post_result(token,line)==0:
+		print "Get Image Failed, Exiting, Bye!"
+		sys.exit()
+	#time.sleep(1)
 

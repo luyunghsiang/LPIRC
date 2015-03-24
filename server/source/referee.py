@@ -4,6 +4,18 @@ LPIRC Referee Server
 ====================
 @2015 - HELPS, Purdue University
 
+TO-DO:
+Time limit
+Power meter reading
+
+
+Rules:
+1. If a single image has multiple bounding boxes, the client can send the bounding boxes in the same POST message.
+2. The client may send multiple POST messages for different bounding boxes of the same image.
+3. Two different images need to be sent in the different POST messages.
+4. The POST messages for different images may be out of order (for example, the bounding boxes for image 5 may be sent before the bounding boxes for image 3)
+
+
 Main Tasks:
 -----------
 1. Authenticate user and provide time limited token for the session.
@@ -74,17 +86,16 @@ test_result = 'result'
 mode_debug = 'True' #'None'
 server_secret_key = 'ITSASECRET'
 total_number_images = 0
-sent_image_dictionary = []
-flag = 0
-bin_size=3
+
 #++++++++++++++++++++++++++++++++ URLs +++++++++++++++++++++++++++++++++++++++++++++++
 url_root = '/'
 url_help = '/help'
 url_login = '/login'
 url_get_token = '/get_token'
 url_verify_token = '/verify'
-url_get_image = '/image/'
+url_get_image = '/image'
 url_post_result = '/result'
+url_no_of_images = '/no_of_images'
 
 #++++++++++++++++++++++++++++++++ Macros/Form-Fields ++++++++++++++++++++++++++++++++++
 ff_username = 'username'
@@ -97,7 +108,6 @@ ff_bb_xmin = 'xmin'
 ff_bb_xmax = 'xmax'
 ff_bb_ymin = 'ymin'
 ff_bb_ymax = 'ymax'
-
 
 #++++++++++++++++++++++++++++++++ Help URL - Response ++++++++++++++++++++++++++++++++++
 server_help_message = ("""
@@ -144,7 +154,7 @@ Valid URLs:
      ff_bb_ymin, ff_bb_ymax, url_post_result))
 
 
-resp_login_fail = 'Inavlid username or password'
+resp_login_fail = 'Invalid username or password'
 resp_invalid_token = 'Invalid Token'
 resp_valid_token = 'Valid Token'
 resp_invalid_image_index = 'Invalid Image index'
@@ -152,8 +162,13 @@ resp_image_index_out_of_range = 'Image index out of range'
 resp_image_dir_not_exist = 'Image directory does not exist'
 
 #++++++++++++++++++++++++++++++++ Username/Password Database ++++++++++++++++++++++++++
+#
+# Each team will be assigned a pair of username and passwords. 
+#
 # Minimal Flask-Login Example
+#
 # Ref: http://gouthamanbalaraman.com/minimal-flask-login-example.html
+
 class User(UserMixin):
     # proxy for a database of users
     user_database = {"lpirc": ("lpirc", "pass"),
@@ -184,14 +199,15 @@ def server_help():
 @app.route(url_login, methods=['post','get'])
 @app.route(url_get_token, methods=['post','get'])
 def login_check():
-    global sent_image_dictionary
     global result_file
-    sent_image_dictionary = []
-    rx_username = request.form[ff_username]
-    rx_password = request.form[ff_password]
+    try:
+    	rx_username = request.form[ff_username]
+    	rx_password = request.form[ff_password]
+    except:
+	return Response(response="username or password field entry", status=401) # Unauthorized
     # Validate username and password
     if verify_user_entry(rx_username,rx_password) is None:
-        return Response(response=resp_login_fail, status=200)
+        return Response(response=resp_login_fail, status=401) # Unauthorized
     else:
         result_file = rx_username
         # Generate Token
@@ -206,45 +222,56 @@ def login_check():
 def token_check():
     token = request.form[ff_token]
     if verify_user_token(token) is None:
-        return Response(response=resp_invalid_token, status=200)
+        return Response(response=resp_invalid_token, status=401) # Unauthorized
     else:
         return Response(response=resp_valid_token, status=200)
 
 
+# Predetermined list of sequences.
 #++++++++++++++++++++++++++++++++ Send Image url - Response ++++++++++++++++++++++++++++++++
 # Send Images
 @app.route(url_get_image,methods=['post','get'])
 def send_image():
-    global sent_image_dictionary
-    global flag
-    global bin_size
     global list_of_images
-    token = request.form[ff_token]
-    if verify_user_token(token) is None:
-        return Response(response=resp_invalid_token, status=200)
+    try:
+    	token = request.form[ff_token]
+    except:
+	return Response(response=resp_invalid_token, status=401) # Unauthorized
+
+    if (verify_user_token(token) is None) or token=="":
+	print "token invalid"
+        return Response(response=resp_invalid_token, status=401) # Unauthorized
     else:
-        if flag==0:
-            # List all images in directory
-            list_of_images = glob.glob(test_images_dir_wildcard)
-            flag=1
         # Token Verified, Send back images
-        image_index_str = request.args.get('image')
-        match = re.search("[^0-9]", image_index_str)
+	try:
+		image_index_str = request.form['image']
+	except:
+		return Response(response="No Image Index Specified", status=406)  # Not Acceptable
+	match = re.search("[^0-9]", image_index_str)
         if match:
-            return Response(response=resp_invalid_image_index, status=200)
+            return Response(response=resp_invalid_image_index, status=406)  # Not Acceptable
         image_index = int(image_index_str)
         if (image_index <= 0) or (image_index > total_number_images):
-            return Response(response=resp_image_index_out_of_range, status=200)
+            return Response(response=resp_image_index_out_of_range, status=406) # Not Acceptable
         # Assuming image index starts with 1. example: 1,2,3,....
-        sent_already = [item for item in sent_image_dictionary if item[0] == image_index]
-        if not sent_already:
-            image_chosen = 1+randint(bin_size*(image_index-1),bin_size-1+(bin_size*(image_index-1)))
-            sent_image_dictionary.append((image_index,image_chosen))
-        else:
-            image_chosen = sent_already[0][1]
+        image_chosen = image_index
         # Flask send file expects split directory arguments
         split_path_image = os.path.split(list_of_images[image_chosen])
-        return send_from_directory(split_path_image[0], split_path_image[1], as_attachment=True)        
+        return send_from_directory(split_path_image[0], split_path_image[1], as_attachment=True)
+
+#++++++++++++++++++++++++++++++++ Total number of images - Response ++++++++++++++++++++++++++++++++
+# Send number of images
+@app.route(url_no_of_images,methods=['post'])
+def send_no_of_images():
+    global total_number_images
+    try:
+    	token = request.form[ff_token]
+    except:
+	return Response(response=resp_invalid_token, status=401) # Unauthorize
+    if verify_user_token(token) is None:
+        return Response(response='Invalid User', status=401)  # Unauthorized
+    else:
+        return Response(response=str(total_number_images), status=200)
 
 
 
@@ -253,36 +280,39 @@ def send_image():
 @app.route("/result",methods=['post'])
 def store_result():
     global result_file
-    global sent_image_dictionary
-    token = request.form['token']
+    try:
+    	token = request.form[ff_token]
+    except:
+	return Response(response=resp_invalid_token, status=401) # Unauthorize
     if verify_user_token(token) is None:
-        return Response(response='Invalid User', status=200)
+        return Response(response='Invalid User', status=401) # Unauthorized
     else:
-        # Token Verified, Store results
-        form = cgi.FieldStorage()
-        image_name = request.form.getlist("image_name")
-	CLASS_ID = request.form.getlist("CLASS_ID")
-	confidence = request.form.getlist("confidence")
-	xmin = request.form.getlist("xmin")
-	ymin = request.form.getlist("ymin")
-	xmax = request.form.getlist("xmax")
-	ymax = request.form.getlist("ymax")
+	try:
+        	# Token Verified, Store results
+        	image_name = request.form.getlist("image_name")
+		CLASS_ID = request.form.getlist("CLASS_ID")
+		confidence = request.form.getlist("confidence")
+		xmin = request.form.getlist("xmin")
+		ymin = request.form.getlist("ymin")
+		xmax = request.form.getlist("xmax")
+		ymax = request.form.getlist("ymax")
+	except:
+		return Response(response='Incorrect Lines\n', status=406) # Not Acceptable
+
+    # Check if the bounding box information lines are complete.
     if len(image_name)==len(CLASS_ID)==len(confidence)==len(xmin)==len(ymin)==len(xmax)==len(ymax)>0:
         s=""
         for item in range(0,len(ymax)):
-            if int(image_name[item]) in dict(sent_image_dictionary):
-                p=dict(sent_image_dictionary)[int(image_name[item])]    
-                s=s+(str(p) + " " + CLASS_ID[item] + " " + confidence[item] + " " + xmin[item] + " " + ymin[item] + " " + xmax[item] + " " + ymax[item] + "\n")
-            else:
-                print "Image " + image_name[item] + " not requested yet"
-        with open('../../'+test_result+'/'+result_file+'.txt','a') as fout:
-            fout.write(s)   
-            fout.close()    
-            return "Result Stored in ../../"+test_result+"/"+result_file+".txt\n"
+                s=s+str(image_name[item]) + " " + CLASS_ID[item] + " " + confidence[item] + " " + xmin[item] + " " + ymin[item] + " " + xmax[item] + " " + ymax[item] + "\r\n"  # \r\n is needed for windows OS, for Linux, just \n is enough
+        # Store the result in file in Append mode
+	with open('../../'+test_result+'/'+result_file+'.txt','a') as fout:
+      		fout.write(s)   
+      		fout.close()    
+        return Response(response='Result Stored in ../../'+test_result+'/'+result_file+'.txt\n', status = 200)
     else:
-        print("Incorrect lines\n")
-        return "Incorrect Lines\n"
-
+        print("Incorrect Lines\n")
+        return Response(response='Incorrect Lines\n', status=406) # Not Acceptable
+# Send results
 
 #++++++++++++++++++++++++++++++++ Internal Functions +++++++++++++++++++++++++++++++++++
 # Verify user credentials
@@ -299,7 +329,10 @@ def verify_user_entry(a_username,a_password):
 
 def verify_user_token(a_token):
     s = JSONWebSignatureSerializer(server_secret_key)
-    credential = s.loads(a_token)
+    try:
+    	credential = s.loads(a_token)
+    except:
+	return None
     if verify_user_entry(credential['username'],credential['password']) is None:
         return None
     else:
@@ -315,7 +348,7 @@ def init_global_vars():
 
     global test_images_dir_wildcard   # eg ../../data/images/*.jpg
     global total_number_images
-
+    global list_of_images
     image_wildcard = os.path.basename(test_images_dir_wildcard)
     image_dirname = os.path.dirname(test_images_dir_wildcard)
 
@@ -323,11 +356,11 @@ def init_global_vars():
     if re.search('[\*\.]', image_wildcard) == None:     # Still Folder name or empty
         assert os.path.exists(test_images_dir_wildcard), test_images_dir_wildcard+'--'+resp_image_dir_not_exist
         test_images_dir_wildcard = os.path.join(test_images_dir_wildcard, '*.*')
-        
-    total_number_images = len(glob.glob(test_images_dir_wildcard))
+    # Build list of images found in the directory
+    list_of_images = glob.glob(test_images_dir_wildcard)    
+    total_number_images = len(list_of_images)
     print "Found %d test images in %s \n" % (total_number_images, test_images_dir_wildcard)
     return
-
 
 
 #++++++++++++++++++++++++++++++++ Parse Command-line Input +++++++++++++++++++++++++++++++
@@ -342,7 +375,7 @@ def parse_cmd_line():
     global server_secret_key
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "bin=","port=", "images=", "result=", "debug", "secret="])
+        opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=","port=", "images=", "result=", "debug", "secret="])
     except getopt.GetoptError as err:
         # print help information and exit:
         print str(err) 
@@ -356,8 +389,6 @@ def parse_cmd_line():
             host_ipaddress = val
         elif switch in ("-p", "--port"):
             host_port = val
-        elif switch =="--bin":
-            bin_size = val
         elif switch == "--images":
             test_images_dir_wildcard = val
         elif switch == "--result":
@@ -372,8 +403,6 @@ def parse_cmd_line():
     print "\nhost = "+host_ipaddress+":"+host_port+"\nTest Images = "+test_images_dir_wildcard+"\nTest Result = "+test_result+"\nDebug Mode  = "+mode_debug 
 
 
-
-
 #++++++++++++++++++++++++++++++++ Script enters here at beginning +++++++++++++++++++++++++++++++++++
 if __name__ == "__main__":
     # Parse Command-line
@@ -383,5 +412,5 @@ if __name__ == "__main__":
     # Start server
     app.config["SECRET_KEY"] = server_secret_key
     app.run(host=host_ipaddress, port=int(host_port), debug=mode_debug)
-
+    
 
