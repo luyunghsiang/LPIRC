@@ -5,7 +5,6 @@ LPIRC Referee Server
 @2015 - HELPS, Purdue University
 
 TO-DO:
-Time limit
 Power meter reading
 
 
