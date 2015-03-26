@@ -31,7 +31,7 @@ client.py [OPTION]...
 Options:
          -w, --ip
                 IP address of the server in format <xxx.xxx.xxx.xxx>
-                Default: 127.0.0.1
+                Default: 128.46.75.108
 
          -p, --port
                 Port number of the server.
@@ -129,6 +129,7 @@ def get_token (username,password):
 	if status == 200:
 		return [buffer.getvalue(),1]
 	else:
+		print status
 		print "Unauthorised Access\n"
 		return [buffer.getvalue(),0]
 
@@ -165,7 +166,7 @@ def get_image(token, image_number):
 	global temp_directory
 	c = pycurl.Curl()
 	c.setopt(c.URL, host_ipaddress+':'+host_port+'/image')#/?image='+str(image_number))
-	post_data = {'token':token, 'image':str(image_number)}
+	post_data = {'token':token, 'image_name':str(image_number)}
 	postfields = urlencode(post_data)
 	c.setopt(c.POSTFIELDS,postfields)
 	# Image will be saved as a file
@@ -294,10 +295,24 @@ def get_lines (no_of_lines):
 	global level
 	if (level+no_of_lines>len(columns[0]) and level<len(columns[0])):
 		no_of_lines = len(columns[0])-level
-		lines = {'image_name':columns[0][level:level+no_of_lines],'CLASS_ID':columns[1][level:level+no_of_lines],'confidence':columns[2][level:level+no_of_lines],'xmin':columns[3][level:level+no_of_lines],'ymin':columns[4][level:level+no_of_lines],'xmax':columns[5][level:level+no_of_lines],'ymax':columns[6][level:level+no_of_lines]}
+		lines = {'image_name':columns[0][level:level+no_of_lines],\
+				'CLASS_ID':columns[1][level:level+no_of_lines],\
+				'confidence':columns[2][level:level+no_of_lines],\
+				'xmin':columns[3][level:level+no_of_lines],\
+				'ymin':columns[4][level:level+no_of_lines],\
+				'xmax':columns[5][level:level+no_of_lines],\
+				'ymax':columns[6][level:level+no_of_lines]\
+			}
 		level = len(columns[0])
 	elif (level+no_of_lines<=len(columns[0])):
-		lines = {'image_name':columns[0][level:level+no_of_lines],'CLASS_ID':columns[1][level:level+no_of_lines],'confidence':columns[2][level:level+no_of_lines],'xmin':columns[3][level:level+no_of_lines],'ymin':columns[4][level:level+no_of_lines],'xmax':columns[5][level:level+no_of_lines],'ymax':columns[6][level:level+no_of_lines]}
+		lines = {'image_name':columns[0][level:level+no_of_lines],\
+				'CLASS_ID':columns[1][level:level+no_of_lines],\
+				'confidence':columns[2][level:level+no_of_lines],\
+				'xmin':columns[3][level:level+no_of_lines],\
+				'ymin':columns[4][level:level+no_of_lines],\
+				'xmax':columns[5][level:level+no_of_lines],\
+				'ymax':columns[6][level:level+no_of_lines]\
+			}
 		level = level + no_of_lines
 
 	return lines
@@ -402,7 +417,7 @@ def parse_cmd_line():
 
 
 #+++++++++++++++++++++++++++ Global Variables ++++++++++++++++++++++++++++++++++++++++++++++++++++
-host_ipaddress = '127.0.0.1'
+host_ipaddress = '128.46.75.108'
 host_port = '5000'
 password = 'pass'
 score = 100
@@ -413,7 +428,6 @@ temp_directory = 'temp'
 
 #+++++++++++++++++++++++++++ Start of the script +++++++++++++++++++++++++++++++++++++++++++++++
 parse_cmd_line()
-
 [token, status] = get_token(username,password)   # Login to server and obtain token
 if status==0:
 	print "Incorrect Username and Password. Bye!"
@@ -425,28 +439,30 @@ if status==0:
 	print "Token, Incorrect or Expired. Bye!"
 	sys.exit()
 # This is for illustration purpose
-for w in range (1,12,4):
-	if get_image(token,w)==0:             # get image in the assigned directory with index 'w'
-		print "Get Image Failed, Exiting, Bye!"
-		sys.exit()
-	if get_image(token,w+1)==0:
-		print "Get Image Failed, Exiting, Bye!"
-		sys.exit()
-	#time.sleep(1)
-	if get_image(token,w+2)==0:
-		print "Get Image Failed, Exiting, Bye!"
-		sys.exit()
-	if get_image(token,w+3)==0:
-		print "Get Image Failed, Exiting, Bye!"
-		sys.exit()
-	line = get_lines(5)
-	if post_result(token,line)==0:
-		print "Get Image Failed, Exiting, Bye!"
-		sys.exit()
+while 1==1:
+	for w in range (1,int(no_of_images),4):
+		if get_image(token,w)==0:             # get image in the assigned directory with index 'w'
+			print "Get Image Failed, Exiting, Bye!"
+			sys.exit()
+		if get_image(token,w+1)==0:
+			print "Get Image Failed, Exiting, Bye!"
+			sys.exit()
+		#time.sleep(1)
+		if get_image(token,w+2)==0:
+			print "Get Image Failed, Exiting, Bye!"
+			sys.exit()
+		if get_image(token,w+3)==0:
+			print "Get Image Failed, Exiting, Bye!"
+			sys.exit()
+		line = get_lines(5)
+		if post_result(token,line)==0:
+			print "Get Image Failed, Exiting, Bye!"
+			sys.exit()
 	#time.sleep(1);
-	line = get_lines(5)
-	if post_result(token,line)==0:
-		print "Get Image Failed, Exiting, Bye!"
-		sys.exit()
+		line = get_lines(5)
+		if post_result(token,line)==0:
+			print "Get Image Failed, Exiting, Bye!"
+			sys.exit()
+		print w
 	#time.sleep(1)
 

@@ -45,7 +45,7 @@ referee.py [OPTION]...
 Options:
          -w, --ip
                 IP address of the server in format <xxx.xxx.xxx.xxx>
-                Default: 127.0.0.1
+                Default: 128.46.75.108
 
          -p, --port
                 Port number of the server.
@@ -53,7 +53,7 @@ Options:
 
          --images
                 Test images (Relative to root directory)
-                Default: images/*.png
+                Default: images/*.jpg
 
          --result
                 Test results (Relative to root directory)
@@ -103,13 +103,12 @@ db = SQLAlchemy(app)
 
 
 #++++++++++++++++++++++++++++++++ Global Variables +++++++++++++++++++++++++++++++++++
-host_ipaddress = '127.0.0.1'
+host_ipaddress = '128.46.75.108'
 host_port = '5000'
-test_images_dir_wildcard = 'images/*.png'
+test_images_dir_wildcard = '../images/*.JPEG'
 test_result = 'result/result.csv'
 mode_debug = 'True' #'None'
 server_secret_key = 'ITSASECRET'
-total_number_images = 0
 timeout = 300 #seconds
 
 #++++++++++++++++++++++++++++++++ URLs +++++++++++++++++++++++++++++++++++++++++++++++
@@ -127,7 +126,7 @@ ff_username = 'username'
 ff_password = 'password'
 ff_timestamp = 'timestamp'
 ff_token = 'token'
-ff_image_index = 'image'
+ff_image_index = 'image_name'
 ff_class_id = 'CLASS_ID'
 ff_confidence = 'confidence'
 ff_bb_xmin = 'xmin'
@@ -182,16 +181,16 @@ Valid URLs:
      ff_bb_ymin, ff_bb_ymax, url_post_result))
 
 
-resp_login_fail = 'Invalid username or password'
-resp_invalid_token = 'Invalid Token'
-resp_valid_token = 'Valid Token'
-resp_invalid_image_index = 'Invalid Image index'
-resp_image_index_out_of_range = 'Image index out of range'
-resp_image_dir_not_exist = 'Image directory does not exist'
-resp_missing_result_field = 'Missing result field'
-resp_result_stored = 'Result stored'
-resp_result_length_mismatch = 'Result field length mismatch'
-resp_missing_username_or_password = 'Missing username or password'
+resp_login_fail = 'Invalid username or password\n'
+resp_invalid_token = 'Invalid Token\n'
+resp_valid_token = 'Valid Token\n'
+resp_invalid_image_index = 'Invalid Image index\n'
+resp_image_index_out_of_range = 'Image index out of range\n'
+resp_image_dir_not_exist = 'Image directory does not exist\n'
+resp_missing_result_field = 'Missing result field\n'
+resp_result_stored = 'Result stored\n'
+resp_result_length_mismatch = 'Result field length mismatch\n'
+resp_missing_username_or_password = 'Missing username or password\n'
 
 #++++++++++++++++++++++++++++++++ Username/Password Database ++++++++++++++++++++++++++
 #
@@ -275,13 +274,16 @@ def server_help():
 @app.route(url_login, methods=['post','get'])
 @app.route(url_get_token, methods=['post','get'])
 def login_check():
+    print "hi"
     try:
     	rx_username = request.form[ff_username]
     	rx_password = request.form[ff_password]
+	print "exception"
     except:
 	return Response(response=resp_missing_username_or_password, status=401) # Unauthorized
     # Validate username and password
     if verify_user_entry(rx_username,rx_password) is None:
+	print "********"
         return Response(response=resp_login_fail, status=401) # Unauthorized
     else:
         # Generate time limited token
@@ -308,13 +310,14 @@ def send_image():
     if verify_user_token(token) is None:
         return Response(response=resp_invalid_token, status=401)
     else:
+	list_of_images = glob.glob(test_images_dir_wildcard)
         # Token Verified, Send back images
         image_index_str = request.form[ff_image_index]
         match = re.search("[^0-9]", image_index_str)
         if match:
             return Response(response=resp_invalid_image_index, status=406)  # Not Acceptable
         image_index = int(image_index_str)
-        if (image_index <= 0) or (image_index > total_number_images):
+        if (image_index <= 0) or (image_index > len(list_of_images)):
             return Response(response=resp_image_index_out_of_range, status=406) # Not Acceptable
         # Assuming image index starts with 1. example: 1,2,3,....
         image_index -= 1
@@ -323,7 +326,7 @@ def send_image():
         list_of_images = glob.glob(test_images_dir_wildcard)
         # Flask send file expects split directory arguments
         split_path_image = os.path.split(list_of_images[image_index])
-
+	print request.environ['REMOTE_ADDR']
         return send_from_directory(split_path_image[0], split_path_image[1], as_attachment=True)        
 
 
@@ -338,6 +341,8 @@ def send_no_of_images():
     if verify_user_token(token) is None:
         return Response(response='Invalid User', status=401)  # Unauthorized
     else:
+	total_number_images = len(glob.glob(test_images_dir_wildcard))
+	print request.environ['REMOTE_ADDR']
         return Response(response=str(total_number_images), status=200)
 
 
@@ -352,6 +357,7 @@ def store_result():
     else:
         # Read result fields
         try:
+	    print request.environ['REMOTE_ADDR']
             t_image_name = request.form.getlist(ff_image_index)
             t_class_id = request.form.getlist(ff_class_id)
             t_confidence = request.form.getlist(ff_confidence)
@@ -368,23 +374,19 @@ def store_result():
         t_count = len(t_image_name)
         try:
             for k in range(0,t_count):
-                print "Entered loop \n"
                 t_res = Result(image=t_image_name[k], class_id=t_class_id[k], \
                                confidence=t_confidence[k], \
                                xmin=t_xmin[k], xmax=t_xmax[k], \
                                ymin=t_ymin[k], ymax=t_ymax[k], \
                                timestamp=datetime.utcnow(), \
                                author=sess)
-                print "Created a result instance \n"
                 db.session.add(t_res)
-                print "Added an entry\n"
 
             db.session.commit()
-            print "Database committed \n"
             return Response(response=resp_result_stored, status=200)
 
         except:
-            return Response(response=resp_result_length_mismatch, status=200)
+            return Response(response=resp_result_length_mismatch, status=406)
 
 
 
@@ -455,6 +457,7 @@ def generate_token(a_username,a_password):
         create_lpirc_session(a_username)
     else:
         # Should be a penalty for multiple login attempts
+	print request.environ['REMOTE_ADDR']
         delete_lpirc_session(a_username)
         create_lpirc_session(a_username)
 
@@ -483,9 +486,9 @@ def create_lpirc_session(a_username):
         s = Session(a_username,None)
         db.session.add(s)
         db.session.commit()
-        print "lpirc session created for {}\n".format(a_username)
+        print "LPIRC session created for {}\n".format(a_username)
     else:
-        print "lpirc session already exists for {}\n".format(a_username)
+        print "LPIRC session already exists for {}\n".format(a_username)
         
     return
 
@@ -511,7 +514,6 @@ def usage():
 def init_global_vars():
 
     global test_images_dir_wildcard   # eg ../../data/images/*.jpg
-    global total_number_images
 
     image_wildcard = os.path.basename(test_images_dir_wildcard)
     image_dirname = os.path.dirname(test_images_dir_wildcard)
