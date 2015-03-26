@@ -5,7 +5,9 @@ LPIRC Referee Server
 @2015 - HELPS, Purdue University
 
 TO-DO:
-Power meter reading
+1. Power meter reading
+2. Exporting data from database to csv file for post processing
+
 
 
 Rules:
@@ -19,9 +21,17 @@ Rules:
 Main Tasks:
 -----------
 1. Authenticate user and provide time limited token for the session.
+     - Timeout is set to 5 minutes by default. 
+     - If multiple attempts are made to login, all the previous data will be overwritten.
 2. Send images to token validated client devices upon GET request.
+     - The image list in the local directory is refreshed every time before an image is sent.
+     - This feature allows image directory to be modified with server running.
 3. Receive asynchronous post results for final evaluation.
+     - The results are stored in a database.
+     - Database allows results to be stored for all users in a single file.
+     - Only required user's data is written to a csv file for post processing
 4. Get power meter readings from powermeter.
+     - Powermeter readings are also stored in the same database.
 
 Requirements:
 -------------
@@ -210,6 +220,8 @@ class User(UserMixin):
 #      1. http://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-iv-database
 #      2. https://pythonhosted.org/Flask-SQLAlchemy/quickstart.html#simple-relationships
 
+# Session database maintains the session information.
+# A session is created or overwritten, each time an user logs in.
 class Session(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True)
@@ -231,7 +243,7 @@ class Session(db.Model):
         return '<Session %r>' % self.username
 
 
-
+# Result database is associated with a session
 class Result(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     image = db.Column(db.String(40))
@@ -272,7 +284,7 @@ def login_check():
     if verify_user_entry(rx_username,rx_password) is None:
         return Response(response=resp_login_fail, status=401) # Unauthorized
     else:
-        # Generate Token
+        # Generate time limited token
         token = generate_token(rx_username,rx_password)
         return Response(response=token, status=200)
 
@@ -451,6 +463,7 @@ def generate_token(a_username,a_password):
     dt = sess.timestamp
     dt_str = dt.strftime(datetime_format)
     print dt_str
+    # Adding session created time for timeout validation
     token = s.dumps({ff_username: a_username, ff_password: a_password, ff_timestamp: dt_str})
     return token
 
