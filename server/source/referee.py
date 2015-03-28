@@ -45,7 +45,7 @@ referee.py [OPTION]...
 Options:
          -w, --ip
                 IP address of the server in format <xxx.xxx.xxx.xxx>
-                Default: 128.46.75.108
+                Default: 127.0.0.1
 
          -p, --port
                 Port number of the server.
@@ -103,7 +103,7 @@ db = SQLAlchemy(app)
 
 
 #++++++++++++++++++++++++++++++++ Global Variables +++++++++++++++++++++++++++++++++++
-host_ipaddress = '128.46.75.108'
+host_ipaddress = '127.0.0.1'
 host_port = '5000'
 test_images_dir_wildcard = '../images/*.JPEG'
 test_result = 'result/result.csv'
@@ -140,28 +140,29 @@ datetime_format = "%d/%m/%yT%H:%M:%S.%f"
 server_help_message = ("""
 Valid URLs:
             (post/get)     --NA--                            host/
-                                                       Example: curl 128.46.75.108:5000/
+                                                             Example: curl 127.0.0.1:5000/
 
-            (post/get)     --NA--                         host%s
-                                                       Example: curl 128.46.75.108:5000%s
+            (post/get)     --NA--                            host%s
+                                                             Example: curl 127.0.0.1:5000%s
 
             (post)      (%s=[user]&%s=[pass])    host%s
-                                                       Example: curl --data "%s=user&%s=pass" 128.46.75.108:5000%s
+                                                             Example: curl --data "%s=user&%s=pass" 127.0.0.1:5000%s
 
             (post)      (%s=[token])                      host%s
-                                                       Example: curl --data "%s=daksldjsaldkjlkj32....." 128.46.75.108:5000%s
+                                                             Example: curl --data "%s=daksldjsaldkjlkj32....." 127.0.0.1:5000%s
 
             (post)      (%s=[token]&%s=[image_index])  host%s (Image index starts with 1: 1,2,3,...)
-                                                       Example: curl --data "%s=daks....&%s=3" 128.46.75.108:5000%s
+                                                             Example: curl --data "%s=daks....&%s=3" 127.0.0.1:5000%s
 
             (post)      (%s=[token]&%s=[image_index]&..
-                             %s=[id]&%s=[conf]&..
-                             %s=[xmin]&%s=[xmax]&..
-                             %s=[ymin]&%s=[ymax])            host%s
-                                                           Example: curl --data "%s=daks....&%s=3&
-                                                                            %s=7&%s=0.38&
-                                                                            %s=123.00&%s=456.00&
-                                                                            %s=132.00&%s=756.00"     128.46.75.108:5000%s
+                         %s=[id]&%s=[conf]&..
+                         %s=[xmin]&%s=[xmax]&..
+                         %s=[ymin]&%s=[ymax])            host%s
+                                                             Example: curl --data "%s=daks....&%s=3&
+                                                                                   %s=7&%s=0.38&
+                                                                                   %s=123.00&%s=456.00&
+                                                                                   %s=132.00&%s=756.00"     127.0.0.1:5000%s
+
 """ %
     (url_help, url_help, 
      ff_username, ff_password, url_login, 
