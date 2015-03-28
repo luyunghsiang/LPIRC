@@ -46,14 +46,14 @@ Options:
                 Default: pass
 		
          --im_dir
-		Directory with respect to the client (local) directory 
+		Directory with respect to the client.py 
                 where received images are stored
-		Default: images
+		Default: ../images
 
 	 --temp_dir
-		Directory with respect to the client (local) directory
+		Directory with respect to the client.py
 		where temporary data is stored
-		Default: temp
+		Default: ../temp
 
          --in
 		Name of the csv file to take the input with respect to source directory
@@ -170,23 +170,23 @@ def get_image(token, image_number):
 	postfields = urlencode(post_data)
 	c.setopt(c.POSTFIELDS,postfields)
 	# Image will be saved as a file
-	with open('../'+temp_directory+'/'+str(image_number)+'.jpg', 'w') as f:
+	with open(temp_directory+'/'+str(image_number)+'.jpg', 'w') as f:
     		c.setopt(c.WRITEDATA, f)
 		c.perform()
 		status = c.getinfo(pycurl.HTTP_CODE)
 		c.close()
 	if status == 200:
 		# Server replied OK so, copy the image from temp_directory to image_directory
-		shutil.move('../'+temp_directory+'/'+str(image_number)+'.jpg','../'+image_directory+'/'+str(image_number)+'.jpg')
+		shutil.move(temp_directory+'/'+str(image_number)+'.jpg',image_directory+'/'+str(image_number)+'.jpg')
 		return 1
 	elif status == 401:
 		# Server replied 401, Unauthorized Access, remove the temporary file
-		os.remove('../'+temp_directory+'/'+str(image_number)+'.jpg')
+		os.remove(temp_directory+'/'+str(image_number)+'.jpg')
 		print "Invalid Token\n"
 		return 0
 	else:
 		# Server replied 406, Not Acceptable, remove the temporary file
-		os.remove('../'+temp_directory+'/'+str(image_number)+'.jpg')
+		os.remove(temp_directory+'/'+str(image_number)+'.jpg')
 		print "The image number is not Acceptable\n" 
 		return 0
 
@@ -422,8 +422,8 @@ password = 'pass'
 score = 100
 username = 'lpirc'
 csv_filename = 'golden_output.csv'
-image_directory = 'images'
-temp_directory = 'temp'
+image_directory = '../images'
+temp_directory = '../temp'
 
 #+++++++++++++++++++++++++++ Start of the script +++++++++++++++++++++++++++++++++++++++++++++++
 parse_cmd_line()
@@ -444,7 +444,7 @@ while 1==1:
 			print "Get Image Failed, Exiting, Bye!"
 			sys.exit()
 		else:
-			print "Image Stored in client directory ../"+image_directory+"/"+str(w)+".jpg"
+			print "Image Stored in client directory "+image_directory+"/"+str(w)+".jpg"
 		line = get_lines(1)
 		if post_result(token,line)==0:        # If post_result failed, exit.
 			print "Get Image Failed, Exiting, Bye!"
