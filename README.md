@@ -1,6 +1,8 @@
 # LPIRC
 Low-Power Image Recognition Challenge
 
+If you have any questions or suggestions, please send email to lpirc@ecn.purdue.edu. Thank you.
+
 ## Requirements
 1. Python v2.7.3
 2. Flask - Microframework for Python
