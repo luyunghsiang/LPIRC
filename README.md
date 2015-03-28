@@ -29,7 +29,25 @@ provides the
 
 ### Power Meter
 ### Matlab Post-Processing
-### Sample Client
 
+### Sample Client
+Sample Client performs the following operations:
+
+- POSTS username and password to start a session with the server
+- POSTS the bounding box information to the server.
+- Requests for the images and stores locally.
+
+Additional Notes: 
+
+-Sample Client uses a file "golden_output.csv" which contains list of 
+bounding box information corresponding to the test images in the server.
+This file is being used to simulate the recognition program the
+participant will have during the competition. This is just sample data
+to check if the interface with the server is working properly.
+The participant should generate this data by running the recognition software
+on the images sent by the server. 
+
+-client/temp is temporary directory.
+Images are buffered in this directory, and removed immediately after that.
 
 ## References
