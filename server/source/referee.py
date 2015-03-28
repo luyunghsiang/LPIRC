@@ -138,31 +138,35 @@ datetime_format = "%d/%m/%yT%H:%M:%S.%f"
 
 #++++++++++++++++++++++++++++++++ Help URL - Response ++++++++++++++++++++++++++++++++++
 server_help_message = ("""
+<HTML>
+<HEAD>
+<p>
 Valid URLs:
-            (post/get)     --NA--                            host/
-                                                             Example: curl 127.0.0.1:5000/
+            (post/get)     --NA--                            host/<br>
+         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                      Example: curl 128.46.75.108:5000/</p>
 
-            (post/get)     --NA--                            host%s
-                                                             Example: curl 127.0.0.1:5000%s
+        <p>    (post/get)     --NA--                         host%s<br>
+         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                      Example: curl 128.46.75.108:5000%s</p>
 
-            (post)      (%s=[user]&%s=[pass])    host%s
-                                                             Example: curl --data "%s=user&%s=pass" 127.0.0.1:5000%s
+        <p>    (post)      (%s=[user]&%s=[pass])    host%s<br>
+         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                      Example: curl --data "%s=user&%s=pass" 128.46.75.108:5000%s </p>
 
-            (post)      (%s=[token])                      host%s
-                                                             Example: curl --data "%s=daksldjsaldkjlkj32....." 127.0.0.1:5000%s
+        <p>    (post)      (%s=[token])                      host%s<br>
+         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                      Example: curl --data "%s=daksldjsaldkjlkj32....." 128.46.75.108:5000%s</p>
 
-            (post)      (%s=[token]&%s=[image_index])  host%s (Image index starts with 1: 1,2,3,...)
-                                                             Example: curl --data "%s=daks....&%s=3" 127.0.0.1:5000%s
+        <p>    (post)      (%s=[token]&%s=[image_index])  host%s (Image index starts with 1: 1,2,3,...)<br>
+         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                      Example: curl --data "%s=daks....&%s=3" 128.46.75.108:5000%s</p>
 
-            (post)      (%s=[token]&%s=[image_index]&..
-                         %s=[id]&%s=[conf]&..
-                         %s=[xmin]&%s=[xmax]&..
-                         %s=[ymin]&%s=[ymax])            host%s
-                                                             Example: curl --data "%s=daks....&%s=3&
-                                                                                   %s=7&%s=0.38&
-                                                                                   %s=123.00&%s=456.00&
-                                                                                   %s=132.00&%s=756.00"     127.0.0.1:5000%s
-
+        <p>    (post)      (%s=[token]&%s=[image_index]&..<br>
+         &nbsp&nbsp&nbsp        %s=[id]&%s=[conf]&..<br>
+         &nbsp&nbsp&nbsp        %s=[xmin]&%s=[xmax]&..<br>
+         &nbsp&nbsp&nbsp        %s=[ymin]&%s=[ymax])            host%s<br>
+         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                          Example: curl --data "%s=daks....&%s=3&<br>
+         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                               %s=7&%s=0.38&<br>
+         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                               %s=123.00&%s=456.00&<br>
+         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                               %s=132.00&%s=756.00"     128.46.75.108:5000%s</p>
+</HEAD>
+</HTML>
 """ %
     (url_help, url_help, 
      ff_username, ff_password, url_login, 
@@ -326,7 +330,6 @@ def send_image():
         list_of_images = glob.glob(test_images_dir_wildcard)
         # Flask send file expects split directory arguments
         split_path_image = os.path.split(list_of_images[image_index])
-	print request.environ['REMOTE_ADDR']
         return send_from_directory(split_path_image[0], split_path_image[1], as_attachment=True)        
 
 
@@ -342,7 +345,6 @@ def send_no_of_images():
         return Response(response='Invalid User', status=401)  # Unauthorized
     else:
 	total_number_images = len(glob.glob(test_images_dir_wildcard))
-	print request.environ['REMOTE_ADDR']
         return Response(response=str(total_number_images), status=200)
 
 
@@ -357,7 +359,6 @@ def store_result():
     else:
         # Read result fields
         try:
-	    print request.environ['REMOTE_ADDR']
             t_image_name = request.form.getlist(ff_image_index)
             t_class_id = request.form.getlist(ff_class_id)
             t_confidence = request.form.getlist(ff_confidence)
@@ -457,7 +458,6 @@ def generate_token(a_username,a_password):
         create_lpirc_session(a_username)
     else:
         # Should be a penalty for multiple login attempts
-	print request.environ['REMOTE_ADDR']
         delete_lpirc_session(a_username)
         create_lpirc_session(a_username)
 
