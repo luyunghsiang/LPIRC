@@ -49,5 +49,6 @@ on the images sent by the server.
 
 -client/temp is temporary directory.
 Images are buffered in this directory, and removed immediately after that.
+Images are copied to the 'images' directory if and only if, Server replies with OK status (200). 
 
 ## References
