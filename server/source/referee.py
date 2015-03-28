@@ -138,35 +138,30 @@ datetime_format = "%d/%m/%yT%H:%M:%S.%f"
 
 #++++++++++++++++++++++++++++++++ Help URL - Response ++++++++++++++++++++++++++++++++++
 server_help_message = ("""
-<HTML>
-<HEAD>
-<p>
 Valid URLs:
-            (post/get)     --NA--                            host/<br>
-         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                      Example: curl 128.46.75.108:5000/</p>
+            (post/get)     --NA--                            host/
+                                                       Example: curl 128.46.75.108:5000/
 
-        <p>    (post/get)     --NA--                         host%s<br>
-         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                      Example: curl 128.46.75.108:5000%s</p>
+            (post/get)     --NA--                         host%s
+                                                       Example: curl 128.46.75.108:5000%s
 
-        <p>    (post)      (%s=[user]&%s=[pass])    host%s<br>
-         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                      Example: curl --data "%s=user&%s=pass" 128.46.75.108:5000%s </p>
+            (post)      (%s=[user]&%s=[pass])    host%s
+                                                       Example: curl --data "%s=user&%s=pass" 128.46.75.108:5000%s
 
-        <p>    (post)      (%s=[token])                      host%s<br>
-         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                      Example: curl --data "%s=daksldjsaldkjlkj32....." 128.46.75.108:5000%s</p>
+            (post)      (%s=[token])                      host%s
+                                                       Example: curl --data "%s=daksldjsaldkjlkj32....." 128.46.75.108:5000%s
 
-        <p>    (post)      (%s=[token]&%s=[image_index])  host%s (Image index starts with 1: 1,2,3,...)<br>
-         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                      Example: curl --data "%s=daks....&%s=3" 128.46.75.108:5000%s</p>
+            (post)      (%s=[token]&%s=[image_index])  host%s (Image index starts with 1: 1,2,3,...)
+                                                       Example: curl --data "%s=daks....&%s=3" 128.46.75.108:5000%s
 
-        <p>    (post)      (%s=[token]&%s=[image_index]&..<br>
-         &nbsp&nbsp&nbsp        %s=[id]&%s=[conf]&..<br>
-         &nbsp&nbsp&nbsp        %s=[xmin]&%s=[xmax]&..<br>
-         &nbsp&nbsp&nbsp        %s=[ymin]&%s=[ymax])            host%s<br>
-         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                          Example: curl --data "%s=daks....&%s=3&<br>
-         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                               %s=7&%s=0.38&<br>
-         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                               %s=123.00&%s=456.00&<br>
-         &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp                               %s=132.00&%s=756.00"     128.46.75.108:5000%s</p>
-</HEAD>
-</HTML>
+            (post)      (%s=[token]&%s=[image_index]&..
+                             %s=[id]&%s=[conf]&..
+                             %s=[xmin]&%s=[xmax]&..
+                             %s=[ymin]&%s=[ymax])            host%s
+                                                           Example: curl --data "%s=daks....&%s=3&
+                                                                            %s=7&%s=0.38&
+                                                                            %s=123.00&%s=456.00&
+                                                                            %s=132.00&%s=756.00"     128.46.75.108:5000%s
 """ %
     (url_help, url_help, 
      ff_username, ff_password, url_login, 
@@ -278,16 +273,13 @@ def server_help():
 @app.route(url_login, methods=['post','get'])
 @app.route(url_get_token, methods=['post','get'])
 def login_check():
-    print "hi"
     try:
     	rx_username = request.form[ff_username]
     	rx_password = request.form[ff_password]
-	print "exception"
     except:
 	return Response(response=resp_missing_username_or_password, status=401) # Unauthorized
     # Validate username and password
     if verify_user_entry(rx_username,rx_password) is None:
-	print "********"
         return Response(response=resp_login_fail, status=401) # Unauthorized
     else:
         # Generate time limited token
