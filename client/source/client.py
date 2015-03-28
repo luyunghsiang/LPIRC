@@ -177,8 +177,7 @@ def get_image(token, image_number):
 		c.close()
 	if status == 200:
 		# Server replied OK so, copy the image from temp_directory to image_directory
-		shutil.copyfile('../'+temp_directory+'/'+str(image_number)+'.jpg','../'+image_directory+'/'+str(image_number)+'.jpg')
-		os.remove('../'+temp_directory+'/'+str(image_number)+'.jpg')
+		shutil.move('../'+temp_directory+'/'+str(image_number)+'.jpg','../'+image_directory+'/'+str(image_number)+'.jpg')
 		return 1
 	elif status == 401:
 		# Server replied 401, Unauthorized Access, remove the temporary file
@@ -440,29 +439,16 @@ if status==0:
 	sys.exit()
 # This is for illustration purpose
 while 1==1:
-	for w in range (1,int(no_of_images),4):
-		if get_image(token,w)==0:             # get image in the assigned directory with index 'w'
+	for w in range (1,int(no_of_images),1):
+		if get_image(token,w)==0:             # If get_image failed, exit.
 			print "Get Image Failed, Exiting, Bye!"
 			sys.exit()
-		if get_image(token,w+1)==0:
+		else:
+			print "Image Stored in client directory ../"+image_directory+"/"+str(w)+".jpg"
+		line = get_lines(1)
+		if post_result(token,line)==0:        # If post_result failed, exit.
 			print "Get Image Failed, Exiting, Bye!"
 			sys.exit()
-		#time.sleep(1)
-		if get_image(token,w+2)==0:
-			print "Get Image Failed, Exiting, Bye!"
-			sys.exit()
-		if get_image(token,w+3)==0:
-			print "Get Image Failed, Exiting, Bye!"
-			sys.exit()
-		line = get_lines(5)
-		if post_result(token,line)==0:
-			print "Get Image Failed, Exiting, Bye!"
-			sys.exit()
-	#time.sleep(1);
-		line = get_lines(5)
-		if post_result(token,line)==0:
-			print "Get Image Failed, Exiting, Bye!"
-			sys.exit()
-		print w
-	#time.sleep(1)
+
+		print
 

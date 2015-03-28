@@ -187,7 +187,7 @@ resp_invalid_image_index = 'Invalid Image index\n'
 resp_image_index_out_of_range = 'Image index out of range\n'
 resp_image_dir_not_exist = 'Image directory does not exist\n'
 resp_missing_result_field = 'Missing result field\n'
-resp_result_stored = 'Result stored\n'
+resp_result_stored = 'Result stored in the server database\n'
 resp_result_length_mismatch = 'Result field length mismatch\n'
 resp_missing_username_or_password = 'Missing username or password\n'
 
