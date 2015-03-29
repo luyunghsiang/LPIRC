@@ -55,16 +55,16 @@ If you have any questions or suggestions, please send email to lpirc@ecn.purdue.
       ref:https://pip.pypa.io/en/latest/installing.html
 3. Install required packages
       - Flask 
-               pip install Flask
-               ref: http://flask.pocoo.org/docs/0.10/installation/
+       - pip install Flask
+       - ref: http://flask.pocoo.org/docs/0.10/installation/
       - Flask-Login 
-               pip install Flask-Login
+       - pip install Flask-Login
       - Flask-SQLAlchemy 
-               pip install Flask-SQLAlchemy
-               ref: https://github.com/mitsuhiko/flask-sqlalchemy
+       - pip install Flask-SQLAlchemy
+       - ref: https://github.com/mitsuhiko/flask-sqlalchemy
       - itsdangerous 
-               pip install itsdangerous
-               ref: http://pythonhosted.org//itsdangerous/
+       - pip install itsdangerous
+       - ref: http://pythonhosted.org//itsdangerous/
 
 4. Check referee.py for options 
       python referee.py --help
