@@ -20,6 +20,17 @@ Rules:
 4. The POST messages for different images may be out of order (for example, the bounding boxes for image 5 may be sent before the bounding boxes for image 3)
 
 
+Steps to Follow to Run the client script:
+1. Download client.py and golden_output.csv files from https://github.com/luyunghsiang/LPIRC.git
+2. Keep both the files in the same directory.
+3. Run the command:
+
+   >python client.py -w 128.46.75.108 --im_dir images --temp_dir temp
+	
+   This command will start the script by connecting it to the server hosted by lpirc.ecn.purdue.edu
+   The script will create two new directories, "temp" and "images", in the same directory as client.py, if they are not already present.
+   All the images received from the server will be stored in the "images" directory.
+
 Requirements:
 -------------
 1. Python v2.7.3
@@ -169,6 +180,14 @@ def get_image(token, image_number):
 	post_data = {'token':token, 'image_name':str(image_number)}
 	postfields = urlencode(post_data)
 	c.setopt(c.POSTFIELDS,postfields)
+	try:
+    		os.stat(temp_directory)
+	except:
+    		os.mkdir(temp_directory)
+	try:
+    		os.stat(image_directory)
+	except:
+    		os.mkdir(image_directory)
 	# Image will be saved as a file
 	with open(temp_directory+'/'+str(image_number)+'.jpg', 'w') as f:
     		c.setopt(c.WRITEDATA, f)
@@ -384,7 +403,7 @@ def parse_cmd_line():
     global image_directory
     global temp_directory
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "port=", "user=", "pass=", "in=", "dir=", "score="])
+        opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "port=", "user=", "pass=", "in=", "im_dir=","temp_dir=","score="])
     except getopt.GetoptError as err:
         print str(err) 
         usage()
