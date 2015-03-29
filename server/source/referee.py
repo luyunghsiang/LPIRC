@@ -36,8 +36,37 @@ Main Tasks:
 Requirements:
 -------------
 1. Python v2.7.3
-2. Flask - Microframework for Python
+2. Flask v0.10.x - Microframework for Python
 3. Flask-SQLAlchemy
+4. Flask-Login          
+5. itsdangerous v0.24   
+
+
+Installation:
+-------------
+1. Install Python v2.7.3
+2. Install any Python package manager (example pip)
+      ref:https://pip.pypa.io/en/latest/installing.html
+3. Install required packages
+      a. Flask 
+               pip install Flask
+               ref: http://flask.pocoo.org/docs/0.10/installation/
+      b. Flask-Login 
+               pip install Flask-Login
+      c. Flask-SQLAlchemy 
+               pip install Flask-SQLAlchemy
+               ref: https://github.com/mitsuhiko/flask-sqlalchemy
+      d. itsdangerous 
+               pip install itsdangerous
+               ref: http://pythonhosted.org//itsdangerous/
+
+4. Check referee.py for options 
+      python referee.py --help
+5. Host server 
+      python referee.py --ip 127.0.0.1 --port 5000 --images "../images/*.jpg" --timeout 300
+       - Hosts server at 127.0.0.1:5000, sending images (*.jpg) to client from directory "../images".
+       - Session timeout of 300 seconds
+
 
 Usage:
 ------
