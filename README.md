@@ -54,15 +54,15 @@ If you have any questions or suggestions, please send email to lpirc@ecn.purdue.
 2. Install any Python package manager (example pip)
       ref:https://pip.pypa.io/en/latest/installing.html
 3. Install required packages
-      a. Flask 
+      - Flask 
                pip install Flask
                ref: http://flask.pocoo.org/docs/0.10/installation/
-      b. Flask-Login 
+      - Flask-Login 
                pip install Flask-Login
-      c. Flask-SQLAlchemy 
+      - Flask-SQLAlchemy 
                pip install Flask-SQLAlchemy
                ref: https://github.com/mitsuhiko/flask-sqlalchemy
-      d. itsdangerous 
+      - itsdangerous 
                pip install itsdangerous
                ref: http://pythonhosted.org//itsdangerous/
 
