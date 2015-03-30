@@ -115,6 +115,7 @@ Assumptions:
 import getopt, sys, re, glob, os                                          # Parser for command-line options
 from datetime import datetime,date,time                                   # Python datetime for session timeout
 from flask import Flask, url_for, send_from_directory, request, Response  # Webserver Microframework
+from flask import redirect                                                # Flask modules
 from flask.ext.login import LoginManager, UserMixin, login_required       # Login manager 
 from itsdangerous import JSONWebSignatureSerializer                       # Token for authentication
 from flask.ext.sqlalchemy import SQLAlchemy                               # lpirc session database
@@ -287,8 +288,15 @@ class Result(db.Model):
         return '<Result %r>' % (self.image)
 
 
-
 #++++++++++++++++++++++++++++++++ Root url - Response +++++++++++++++++++++++++++++++++++
+# Redirect to http://lpirc.net/
+@app.route(url_root,methods=['post','get'])
+def server_root_redirect():
+    return redirect("http://lpirc.net/", code=302)
+
+
+
+#++++++++++++++++++++++++++++++++ Help url - Response +++++++++++++++++++++++++++++++++++
 # Help and Default options
 @app.route(url_root,methods=['post','get'])
 @app.route(url_help,methods=['post','get'])
