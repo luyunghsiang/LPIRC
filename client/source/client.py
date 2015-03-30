@@ -46,15 +46,17 @@ Options:
 
          -p, --port
                 Port number of the server.
-                Default: 5000
+                Default: 80
 
          --user
                 Username
-                Default: lpirc
+                The user must send a mail to lpirc@ecn.purdue.edu to request 
+		for a username and password.
 
          --pass
                 Password for the username
-                Default: pass
+                The user must send a mail to lpirc@ecn.purdue.edu to request 
+		for a username and password.
 		
          --im_dir
 		Directory with respect to the client.py 
@@ -140,7 +142,7 @@ def get_token (username,password):
 	if status == 200:
 		return [buffer.getvalue(),1]
 	else:
-		print status
+	#	print status
 		print "Unauthorised Access\n"
 		return [buffer.getvalue(),0]
 
@@ -436,10 +438,10 @@ def parse_cmd_line():
 
 #+++++++++++++++++++++++++++ Global Variables ++++++++++++++++++++++++++++++++++++++++++++++++++++
 host_ipaddress = '128.46.75.108'
-host_port = '5000'
-password = 'pass'
+host_port = '80'
+password = ''
 score = 100
-username = 'lpirc'
+username = ''
 csv_filename = 'golden_output.csv'
 image_directory = '../images'
 temp_directory = '../temp'
@@ -458,7 +460,7 @@ if status==0:
 	sys.exit()
 # This is for illustration purpose
 while 1==1:
-	for w in range (1,int(no_of_images),1):
+	for w in range (1,int(no_of_images)+1,1):
 		if get_image(token,w)==0:             # If get_image failed, exit.
 			print "Get Image Failed, Exiting, Bye!"
 			sys.exit()
