@@ -230,9 +230,7 @@ resp_missing_username_or_password = 'Missing username or password\n'
 class User(UserMixin):
     # proxy for a database of users
     user_database = {"lpirc": ("lpirc", "pass"),
-                     "JaneDoe": ("JaneDoe", "Jane"),
-                     "user": ("user", "pass"),
-                     "JaneDoe": ("JaneDoe", "Jane")}
+                     "user_330": ("user_330", "pass@#$2249")}
  
     def __init__(self, username, password):
         self.id = username
