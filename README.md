@@ -3,6 +3,9 @@ Low-Power Image Recognition Challenge
 
 If you have any questions or suggestions, please send email to lpirc@ecn.purdue.edu. Thank you.
 
+To help you test, a web site is available, please do the following
+
+python client.py -w 128.46.75.108 --user lpirc --pass pass
 
 
 ## LPIRC Referee Server 
