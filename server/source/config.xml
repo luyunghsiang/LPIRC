@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Server_Config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="Server_Config.xsd">
+ <Config id="1" name="LPIRC">
+   <IPaddress>127.0.0.1</IPaddress><!-- IP address of the server in format <xxx.xxx.xxx.xxx> -->
+   <Port>5000</Port><!-- Port number of the server -->
+   <Image_Dir>../images/*.png</Image_Dir><!-- Test images (Relative to root directory) -->
+   <Secret_Key>ITSASECRET</Secret_Key><!-- Secret key to generate token -->
+   <Debug_Mode>True</Debug_Mode><!-- Run server in debug mode -->
+   <Timeout>300</Timeout><!-- Client session timeout in seconds -->
+ </Config>
+</Server_Config>

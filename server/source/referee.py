@@ -121,25 +121,18 @@ from itsdangerous import JSONWebSignatureSerializer                       # Toke
 from flask.ext.sqlalchemy import SQLAlchemy                               # lpirc session database
 
 
-app = Flask(__name__)
-# username-password
-login_manager = LoginManager()
-login_manager.init_app(app)
-# session manager
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database/lpirc.db'
-db = SQLAlchemy(app)
-
-
-
 
 #++++++++++++++++++++++++++++++++ Global Variables +++++++++++++++++++++++++++++++++++
+this_file_path = os.path.dirname(os.path.abspath(__file__))
+
 host_ipaddress = '127.0.0.1'
 host_port = '5000'
-test_images_dir_wildcard = '../images/*.JPEG'
-test_result = 'result/result.csv'
+test_images_dir_wildcard = os.path.join(this_file_path, '../images/*.*')
+test_result = os.path.join(this_file_path, 'result/result.csv')
 mode_debug = 'True' #'None'
 server_secret_key = 'ITSASECRET'
 timeout = 300 #seconds
+lpirc_db = os.path.join(this_file_path, '../database/lpirc.db')
 
 #++++++++++++++++++++++++++++++++ URLs +++++++++++++++++++++++++++++++++++++++++++++++
 url_root = '/'
@@ -221,6 +214,18 @@ resp_missing_result_field = 'Missing result field\n'
 resp_result_stored = 'Result stored in the server database\n'
 resp_result_length_mismatch = 'Result field length mismatch\n'
 resp_missing_username_or_password = 'Missing username or password\n'
+
+
+#++++++++++++++++++++++++++++++++ Start Flask and Database ++++++++++++++++++++++++++
+app = Flask(__name__)
+# username-password
+login_manager = LoginManager()
+login_manager.init_app(app)
+# session manager
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///'+lpirc_db
+db = SQLAlchemy(app)
+
+
 
 #++++++++++++++++++++++++++++++++ Username/Password Database ++++++++++++++++++++++++++
 #
@@ -419,19 +424,6 @@ def store_result():
 
 
 
-	# if len(image_name)==len(CLASS_ID)==len(confidence)==len(xmin)==len(ymin)==len(xmax)==len(ymax)>0:
-	# 	s=""
-	# 	for item in range(0,len(ymax)):
-	# 		s=s+(image_name[item] + "," + CLASS_ID[item] + "," + confidence[item] + "," + xmin[item] + "," + ymin[item] + "," + xmax[item] + "," + ymax[item] + "\n")
-	# 		with open('./out.csv','a') as fout:
-	# 			fout.write(s)	
-	# 			fout.close()	
-     	# 	return "Result Stored\n"
-	# else:
-	# 	print("Incorrect lines\n")
-	# 	return "Incorrect Lines\n"
-
-
 #++++++++++++++++++++++++++++++++ Internal Functions +++++++++++++++++++++++++++++++++++
 # Verify user credentials
 def verify_user_entry(a_username,a_password):
@@ -542,9 +534,16 @@ def usage():
 def init_global_vars():
 
     global test_images_dir_wildcard   # eg ../../data/images/*.jpg
+    test_images_dir_wildcard = os.path.join(this_file_path, test_images_dir_wildcard)
+
+    global test_result
+    test_result = os.path.join(this_file_path, test_result)
 
     image_wildcard = os.path.basename(test_images_dir_wildcard)
     image_dirname = os.path.dirname(test_images_dir_wildcard)
+
+    print os.getcwd()+"\n"
+    print os.path.dirname(os.path.abspath(__file__))+"\n"
 
     # Check if basename contains wildcard
     if re.search('[\*\.]', image_wildcard) == None:     # Still Folder name or empty
@@ -568,6 +567,7 @@ def parse_cmd_line():
     global mode_debug
     global server_secret_key
     global timeout
+    global lpirc_db
 
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "port=", "images=", "result=", "debug", "secret=", "timeout="])
@@ -597,9 +597,63 @@ def parse_cmd_line():
         else:
             assert False, "unhandled option"
 
-    print "\nhost = "+host_ipaddress+":"+host_port+"\nTest Images = "+test_images_dir_wildcard+"\nTest Result = "+test_result+"\nDebug Mode  = "+mode_debug+"\nTimeout  = "+str(timeout)+"\n" 
+    print "\nhost = "+host_ipaddress+":"+host_port+"\nTest Images = "+\
+        test_images_dir_wildcard+"\nTest Result = "+test_result+\
+        "\nDebug Mode  = "+mode_debug+"\nTimeout  = "+str(timeout)+\
+        "\nDatabase = "+lpirc_db+"\n" 
 
 
+
+
+
+#++++++++++++++++++++++++++++++++ Parse XML Configuration +++++++++++++++++++++++++++++++
+# Main function to parse XML server configuration
+def parse_xml_config():
+
+    global host_ipaddress
+    global host_port
+    global test_images_dir_wildcard
+    global test_result
+    global mode_debug
+    global server_secret_key
+    global timeout
+    global lpirc_db
+
+    xml_config_file = os.path.join(this_file_path, './config.xml')
+    xml_root = 'Server_Config'
+    xml_child = 'Config'
+    xml_ipaddress = 'IPaddress'
+    xml_port = 'Port'
+    xml_image_dir = 'Image_Dir'
+    xml_secret_key = 'Secret_Key'
+    xml_database_dir = 'Database_Dir'
+    xml_debug_mode = 'Debug_Mode'
+    xml_timeout = 'Timeout'
+
+    try:
+        import xml.etree.ElementTree as ET
+        tree = ET.parse(xml_config_file)
+        root = tree.getroot()
+
+        host_ipaddress = root.find('./'+xml_child+'/'+xml_ipaddress).text
+        host_port = root.find('./'+xml_child+'/'+xml_port).text
+        test_images_dir_wildcard = root.find('./'+xml_child+'/'+xml_image_dir).text
+        server_secret_key = root.find('./'+xml_child+'/'+xml_secret_key).text
+        timeout = int(root.find('./'+xml_child+'/'+xml_timeout).text)
+        val = root.find('./'+xml_child+'/'+xml_debug_mode).text
+        if val == 'True':
+            mode_debug = 'True'
+        else:
+            mode_debug = 'None'
+
+        print "\nhost = "+host_ipaddress+":"+host_port+"\nTest Images = "+\
+            test_images_dir_wildcard+"\nTest Result = "+test_result+"\nDebug Mode  = "+\
+            mode_debug+"\nTimeout  = "+str(timeout)+\
+            "\nDatabase = "+lpirc_db+"\n" 
+
+    except:
+        print "XML Parsing error\n"
+            
 
 
 #++++++++++++++++++++++++++++++++ Script enters here at beginning +++++++++++++++++++++++++++++++++++
@@ -613,5 +667,16 @@ if __name__ == "__main__":
     # Start server
     app.config["SECRET_KEY"] = server_secret_key
     app.run(host=host_ipaddress, port=int(host_port), debug=mode_debug)
+
+else:
+    # Parse XML Config file
+    parse_xml_config()
+    # Initialize global variables
+    init_global_vars()
+    # Initialize lpirc session database
+    db.create_all()
+    # Start server
+    app.config["SECRET_KEY"] = server_secret_key
+
 
 
