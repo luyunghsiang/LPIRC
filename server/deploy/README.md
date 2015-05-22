@@ -49,6 +49,7 @@
 
 7. Edit httpd.conf under C:/Apache24/conf
    - Include <Abs path to lpirc_win32.conf>
+   - LoadModule wsgi_module modules/mod_wsgi.so
 
 8. Check absolute paths under lpirc_win32.conf and deploy.wsgi
 

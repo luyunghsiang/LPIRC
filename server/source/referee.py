@@ -82,7 +82,7 @@ Options:
 
          --images
                 Test images (Relative to root directory)
-                Default: images/*.jpg
+                Default: ../images/*.jpg
 
          --result
                 Test results (Relative to root directory)
@@ -98,6 +98,9 @@ Options:
          --timeout
                 Client session timeout in seconds
                 Default: 300 seconds (5 Minutes)
+
+         --enable_powermeter
+                Enables powermeter
 
          -h, --help
                 Displays all the available option
@@ -119,6 +122,9 @@ from flask import redirect                                                # Flas
 from flask.ext.login import LoginManager, UserMixin, login_required       # Login manager 
 from itsdangerous import JSONWebSignatureSerializer                       # Token for authentication
 from flask.ext.sqlalchemy import SQLAlchemy                               # lpirc session database
+import shlex                                                              # For constructing popen shell arguments
+import subprocess                                                         # Non-blocking program execution (Popen, PIPE)
+import time                                                               # For sleep
 
 
 
@@ -134,6 +140,12 @@ server_secret_key = 'ITSASECRET'
 timeout = 300 #seconds
 lpirc_db = os.path.join(this_file_path, '../database/lpirc.db')
 
+enable_powermeter = 0
+powermeter_client = os.path.join(this_file_path, '../powermeter/wt310_client.py')
+powermeter_ipaddress = '192.168.1.3'
+powermeter_update_interval = 1 # seconds
+powermeter_mode = 'RMS' # DC | RMS
+
 #++++++++++++++++++++++++++++++++ URLs +++++++++++++++++++++++++++++++++++++++++++++++
 url_root = '/'
 url_help = '/help'
@@ -143,6 +155,7 @@ url_verify_token = '/verify'
 url_get_image = '/image'
 url_post_result = '/result'
 url_no_of_images = '/no_of_images'
+url_logout = '/logout'
 
 #++++++++++++++++++++++++++++++++ Macros/Form-Fields ++++++++++++++++++++++++++++++++++
 ff_username = 'username'
@@ -157,7 +170,23 @@ ff_bb_xmax = 'xmax'
 ff_bb_ymin = 'ymin'
 ff_bb_ymax = 'ymax'
 
+session_status_active = 'session_active'
+session_status_inactive = 'session_inactive'
+session_status_idle = 'session_idle'
+session_status_timeout = 'session_timeout'
+session_status_lock = 'session_locked'
+
 datetime_format = "%d/%m/%yT%H:%M:%S.%f"
+
+#++++++++++++++++++++++++++++++++ Powermeter Macros ++++++++++++++++++++++++++++++++++
+pmc_cmd_ipaddress = '--pmip'
+pmc_cmd_update_interval = '--pminterval'
+pmc_cmd_mode = '--pmmode'
+pmc_cmd_timeout = '--pmtimeout'
+pmc_cmd_ping = '--pm_ping'
+pmc_cmd_hard_reset = '--pm_hard_reset'
+pmc_cmd_soft_reset = '--pm_soft_reset'
+
 
 #++++++++++++++++++++++++++++++++ Help URL - Response ++++++++++++++++++++++++++++++++++
 server_help_message = ("""
@@ -170,6 +199,9 @@ Valid URLs:
 
             (post)      (%s=[user]&%s=[pass])    host%s
                                                              Example: curl --data "%s=user&%s=pass" 127.0.0.1:5000%s
+
+            (post)      (%s=[token])                      host%s
+                                                             Example: curl --data "%s=daksldjsaldkjlkj32....." 127.0.0.1:5000%s
 
             (post)      (%s=[token])                      host%s
                                                              Example: curl --data "%s=daksldjsaldkjlkj32....." 127.0.0.1:5000%s
@@ -192,6 +224,8 @@ Valid URLs:
      ff_username, ff_password, url_login, 
      ff_token, url_verify_token, 
      ff_token, url_verify_token, 
+     ff_token, url_logout, 
+     ff_token, url_logout, 
      ff_token, ff_image_index, url_get_image, 
      ff_token, ff_image_index, url_get_image, 
      ff_token, ff_image_index, 
@@ -214,7 +248,8 @@ resp_missing_result_field = 'Missing result field\n'
 resp_result_stored = 'Result stored in the server database\n'
 resp_result_length_mismatch = 'Result field length mismatch\n'
 resp_missing_username_or_password = 'Missing username or password\n'
-
+resp_logout = 'Logout success\n'
+resp_powermeter_fail = 'Powermeter not connected\n'
 
 #++++++++++++++++++++++++++++++++ Start Flask and Database ++++++++++++++++++++++++++
 app = Flask(__name__)
@@ -259,14 +294,21 @@ class Session(db.Model):
     username = db.Column(db.String(80), unique=True)
     email = db.Column(db.String(120), unique=True)
     timestamp = db.Column(db.DateTime)
+    status = db.Column(db.String(120), unique=True)
     results = db.relationship('Result', backref='author', lazy='dynamic')
 
-    def __init__(self, username, email, results=None, timestamp=None):
+    def __init__(self, username, email, results=None, timestamp=None, status=None):
         self.username = username
         self.email = email
+
+        if status is None:
+            status = session_status_active
+        self.status = status
+
         if timestamp is None:
             timestamp = datetime.now()
         self.timestamp = timestamp
+
         if results is None:
             results = Result()
         self.results = [results]
@@ -323,9 +365,29 @@ def login_check():
     if verify_user_entry(rx_username,rx_password) is None:
         return Response(response=resp_login_fail, status=401) # Unauthorized
     else:
+        # Start Powermeter
+        if ((enable_powermeter == 1) and (powermeter_start() is not None)):
+            return Response(response=resp_powermeter_fail, status=500)
         # Generate time limited token
         token = generate_token(rx_username,rx_password)
         return Response(response=token, status=200)
+
+
+#++++++++++++++++++++++++++++++++ Logout - Response +++++++++++++++++++++++++++++
+# Logout function
+@app.route(url_logout, methods=['post','get'])
+def logout_session():
+    try:
+    	token = request.form[ff_token]
+    except:
+	return Response(response=resp_invalid_token, status=401) # Unauthorize
+
+    if verify_user_token(token) is None:
+        return Response(response=resp_invalid_token, status=401) # Unauthorized
+    else:
+        credential = get_credential(token)
+        set_session_status(credential[ff_username], session_status_inactive)
+        return Response(response=resp_logout, status=200)
 
 
 #++++++++++++++++++++++++++++++++ Verify Token url - Response +++++++++++++++++++++++++++++
@@ -461,11 +523,16 @@ def verify_user_token(a_token):
 
     if verify_user_entry(credential[ff_username],credential[ff_password]) is None:
         return None
+    elif get_session_status(credential[ff_username]) != session_status_active:
+        print "Session not active: {}\n".format(get_session_status(credential[ff_username]))
+        return None
     else:
         # Verify if timeout
         dt = datetime.strptime(credential[ff_timestamp], datetime_format)
         elapsed = datetime.now()-dt
         if elapsed.total_seconds() > timeout:
+            # Set session status - Timeout
+            set_session_status(credential[ff_username], session_status_timeout)
             print "Elapsed Time = {}".format(elapsed.total_seconds())
             return None
         else:
@@ -489,6 +556,18 @@ def generate_token(a_username,a_password):
     # Adding session created time for timeout validation
     token = s.dumps({ff_username: a_username, ff_password: a_password, ff_timestamp: dt_str})
     return token
+
+# Set session status -> active, inactive, idle, timeout
+def set_session_status(a_username, a_status):
+    sess = Session.query.filter_by(username=a_username).first()
+    sess.status = a_status
+    db.session.commit()
+    return
+
+# Get session status
+def get_session_status(a_username):
+    sess = Session.query.filter_by(username=a_username).first()
+    return sess.status
 
 # Check if lpirc session exists in database
 def valid_lpirc_session(a_username):
@@ -526,6 +605,112 @@ def delete_lpirc_session(a_username):
     return
 
 
+#++++++++++++++++++++++++++++++++ Powermeter Functions +++++++++++++++++++++++++++++++++++
+# Powermeter client command line argument (Default)
+def get_pmc_default_arg():
+    default_command_line = "python\t" + powermeter_client + "\t" + \
+                           pmc_cmd_ipaddress + "\t" + powermeter_ipaddress + "\t" + \
+                           pmc_cmd_mode + "\t" + powermeter_mode + "\t" + \
+                           pmc_cmd_timeout + "\t" + str(timeout) + "\t" + \
+                           pmc_cmd_update_interval + "\t" + str(powermeter_update_interval)\
+
+    return default_command_line
+
+# Powermeter ping
+def powermeter_ping():
+    pm_command_line = get_pmc_default_arg()
+    pm_command_line += "\t" + pmc_cmd_ping
+
+    # Perform system call
+    t_out = system_popen_execute(pm_command_line, "wait for it")
+    if t_out is not None:
+        print "Powermeter ping failed\n"
+        return "Error"
+
+    return None
+
+# Powermeter start
+def powermeter_start():
+    if powermeter_ping() is not None:
+        print "Powermeter communication error\n"
+        return "Error"
+
+    if powermeter_soft_reset() is not None:
+        return "Error"
+
+    pm_command_line = get_pmc_default_arg()
+    # Perform system call
+    t_out = system_popen_execute(pm_command_line)
+    if t_out is not None:
+        print "Powermeter start failed\n"
+        return "Error"
+
+    return None
+
+# Powermeter soft reset
+def powermeter_soft_reset():
+    if powermeter_ping() is not None:
+        print "Powermeter communication error\n"
+        return "Error"
+
+    pm_command_line = get_pmc_default_arg()
+    pm_command_line += "\t" + pmc_cmd_soft_reset
+    # Perform system call
+    t_out = system_popen_execute(pm_command_line, "wait for it")
+    if t_out is not None:
+        print "Powermeter soft reset failed\n"
+        return "Error"
+
+    return None
+
+# Powermeter hard reset
+def powermeter_hard_reset():
+    if powermeter_ping() is not None:
+        print "Powermeter communication error\n"
+        return "Error"
+
+    pm_command_line = get_pmc_default_arg()
+    pm_command_line += "\t" + pmc_cmd_hard_reset
+    # Perform system call
+    t_out = system_popen_execute(pm_command_line, "wait for it")
+    if t_out is not None:
+        print "Powermeter hard reset failed\n"
+        return "Error"
+
+    return None
+
+
+    
+
+# System Popen call
+def system_popen_execute(a_args, a_wait_for_it=None):
+    
+    if sys.platform == 'win32':
+        my_args = a_args.split()
+    else:
+        my_args = shlex.split(a_args)
+
+    # Execute command
+    print my_args
+    try:
+        p = subprocess.Popen(my_args, stdin = None, stdout = subprocess.PIPE, \
+                             stderr = subprocess.PIPE, shell = False)
+    except:
+        print "Popen execution error\n"
+        return "Error" # sys.exit(2) # Abnormal termination
+
+    if a_wait_for_it is None:
+        return None
+
+    output = p.communicate()[0]
+
+    if p.returncode != 0:
+        print "Abnormal exit\n"
+        return "Error" # sys.exit(2) # Abnormal termination
+
+    return None
+    
+
 # Script usage function
 def usage():
     print usage_text
@@ -552,6 +737,14 @@ def init_global_vars():
         
     total_number_images = len(glob.glob(test_images_dir_wildcard))
     print "Found %d test images in %s \n" % (total_number_images, test_images_dir_wildcard)
+
+    # Reset powermeter
+    if enable_powermeter == 1:
+        if powermeter_hard_reset() is not None:
+            print "Error resetting powermeter\n"
+            sys.exit(2)
+        
+
     return
 
 
@@ -568,9 +761,13 @@ def parse_cmd_line():
     global server_secret_key
     global timeout
     global lpirc_db
+    global enable_powermeter
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "port=", "images=", "result=", "debug", "secret=", "timeout="])
+        opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "port=", "images=", "result=", \
+                                                           "debug", "secret=", \
+                                                           "enable_powermeter", \
+                                                           "timeout="])
     except getopt.GetoptError as err:
         # print help information and exit:
         print str(err) 
@@ -594,6 +791,8 @@ def parse_cmd_line():
             server_secret_key = val
         elif switch == "--timeout":
             timeout = int(val)
+        elif switch == "--enable_powermeter":
+            enable_powermeter = 1
         else:
             assert False, "unhandled option"
 
@@ -601,7 +800,10 @@ def parse_cmd_line():
         test_images_dir_wildcard+"\nTest Result = "+test_result+\
         "\nDebug Mode  = "+mode_debug+"\nTimeout  = "+str(timeout)+\
         "\nDatabase = "+lpirc_db+"\n" 
-
+    if enable_powermeter == 1:
+        print "Powermeter Enabled\n"
+    else:
+        print "Powermeter Disabled\n"        
 
 
 

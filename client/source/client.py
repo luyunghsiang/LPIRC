@@ -466,6 +466,7 @@ while 1==1:
 			sys.exit()
 		else:
 			print "Image Stored in client directory "+image_directory+"/"+str(w)+".jpg"
+                time.sleep(5)
 		line = get_lines(1)
 		if post_result(token,line)==0:        # If post_result failed, exit.
 			print "Get Image Failed, Exiting, Bye!"

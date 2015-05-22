@@ -13,10 +13,16 @@ python client.py -w 128.46.75.108 --user lpirc --pass pass
 
 ### TO-DO:
 ---------
-1. Power meter reading
-2. Exporting data from database to csv file for post processing
+1. Exporting data from database to csv file for post processing
 
-
+### Changes:
+-----------
+1. Powermeter integration.
+    - Powermeter executable driver
+	- Powermeter python client
+2. Logout url
+3. Session status entry in database
+4. Powermeter driver source code
 
 ### Rules:
 ----------
@@ -223,7 +229,7 @@ Images are copied to the 'images' directory if and only if, Server replies with 
    - Copy generated mod_wsgi.so to modules/ under Apache
 
 7. Edit httpd.conf under C:/Apache24/conf
-   - Include <Abs path to lpirc_win32.conf>
+   - Include Abs path to lpirc_win32.conf
 
 8. Check absolute paths under lpirc_win32.conf and deploy.wsgi
 
