@@ -108,8 +108,8 @@ Options:
 
 Following URLs are recognized, served and issued:
 ------------------------------------------------
-Assumptions:
------------
+Note:
+-----
 1. Image index starts from 1 (not 0).
 2. Command line arguments expect to be within quotes
 3. Use sql browser to view database (http://sqlitebrowser.org/)
@@ -125,7 +125,8 @@ from flask.ext.sqlalchemy import SQLAlchemy                               # lpir
 import shlex                                                              # For constructing popen shell arguments
 import subprocess                                                         # Non-blocking program execution (Popen, PIPE)
 import time                                                               # For sleep
-
+import string, random
+import csv                                                                # Export database entries for scoring
 
 
 #++++++++++++++++++++++++++++++++ Global Variables +++++++++++++++++++++++++++++++++++
@@ -135,7 +136,7 @@ host_ipaddress = '127.0.0.1'
 host_port = '5000'
 test_images_dir_wildcard = os.path.join(this_file_path, '../images/*.*')
 test_result = os.path.join(this_file_path, 'result/result.csv')
-mode_debug = 'True' #'None'
+mode_debug = 'None' #'None'
 server_secret_key = 'ITSASECRET'
 timeout = 300 #seconds
 lpirc_db = os.path.join(this_file_path, '../database/lpirc.db')
@@ -146,6 +147,8 @@ powermeter_ipaddress = '192.168.1.3'
 powermeter_update_interval = 1 # seconds
 powermeter_mode = 'RMS' # DC | RMS
 
+lpirc_powercsv_dir = os.path.join(this_file_path, '../csv/powermeter/')
+lpirc_resultcsv_dir = os.path.join(this_file_path, '../csv/submissions/')
 #++++++++++++++++++++++++++++++++ URLs +++++++++++++++++++++++++++++++++++++++++++++++
 url_root = '/'
 url_help = '/help'
@@ -156,7 +159,8 @@ url_get_image = '/image'
 url_post_result = '/result'
 url_no_of_images = '/no_of_images'
 url_logout = '/logout'
-
+url_post_powermeter_readings = '/powermeter'
+url_csvsave_submissions = '/savecsv'
 #++++++++++++++++++++++++++++++++ Macros/Form-Fields ++++++++++++++++++++++++++++++++++
 ff_username = 'username'
 ff_password = 'password'
@@ -169,6 +173,12 @@ ff_bb_xmin = 'xmin'
 ff_bb_xmax = 'xmax'
 ff_bb_ymin = 'ymin'
 ff_bb_ymax = 'ymax'
+ff_player = 'player'
+ff_voltage = 'voltage'
+ff_current = 'current'
+ff_power = 'power'
+ff_energy = 'energy'
+ff_elapsed = 'elapsed'
 
 session_status_active = 'session_active'
 session_status_inactive = 'session_inactive'
@@ -179,6 +189,9 @@ session_status_lock = 'session_locked'
 datetime_format = "%d/%m/%yT%H:%M:%S.%f"
 
 #++++++++++++++++++++++++++++++++ Powermeter Macros ++++++++++++++++++++++++++++++++++
+powermeter_user = 'wt310'
+powermeter_password = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(32))
+
 pmc_cmd_ipaddress = '--pmip'
 pmc_cmd_update_interval = '--pminterval'
 pmc_cmd_mode = '--pmmode'
@@ -186,7 +199,13 @@ pmc_cmd_timeout = '--pmtimeout'
 pmc_cmd_ping = '--pm_ping'
 pmc_cmd_hard_reset = '--pm_hard_reset'
 pmc_cmd_soft_reset = '--pm_soft_reset'
-
+pmc_cmd_user = '--pmuser'
+pmc_cmd_password = '--pmpassword'
+pmc_cmd_player = '--pmplayer'
+pmc_cmd_start = '--pm_start'
+pmc_cmd_stop = '--pm_stop'
+pmc_cmd_host_ip = '--host_ip'
+pmc_cmd_host_port = '--host_port'
 
 #++++++++++++++++++++++++++++++++ Help URL - Response ++++++++++++++++++++++++++++++++++
 server_help_message = ("""
@@ -218,6 +237,19 @@ Valid URLs:
                                                                                    %s=123.00&%s=456.00&
                                                                                    %s=132.00&%s=756.00"     127.0.0.1:5000%s
 
+            (post)      (%s=[token]&%s=[player_name]&..
+                         %s=[voltage]&%s=[current]&..
+                         %s=[power]&%s=[energy]&..
+                         %s=[elapsed_time])            host%s
+                                                             Example: curl --data "%s=daks....&%s=lpirc&
+                                                                                   %s=120&%s=0.1&
+                                                                                   %s=9&%s=45&
+                                                                                   %s=5"     127.0.0.1:5000%s
+
+            (post)      (%s=[token]&%s=[player_name])  host%s (All submissions saved if no player_name)
+                                                             Example: curl --data "%s=daks....&%s=lpirc" 127.0.0.1:5000%s
+
+
 """ %
     (url_help, url_help, 
      ff_username, ff_password, url_login, 
@@ -235,7 +267,17 @@ Valid URLs:
      ff_token, ff_image_index, 
      ff_class_id, ff_confidence, 
      ff_bb_xmin, ff_bb_xmax, 
-     ff_bb_ymin, ff_bb_ymax, url_post_result))
+     ff_bb_ymin, ff_bb_ymax, url_post_result,
+     ff_token, ff_player, 
+     ff_voltage, ff_current, 
+     ff_power, ff_energy, 
+     ff_elapsed, url_post_powermeter_readings, 
+     ff_token, ff_player, 
+     ff_voltage, ff_current, 
+     ff_power, ff_energy, 
+     ff_elapsed, url_post_powermeter_readings,
+     ff_token, ff_player, url_csvsave_submissions,
+     ff_token, ff_player, url_csvsave_submissions))
 
 
 resp_login_fail = 'Invalid username or password\n'
@@ -250,6 +292,11 @@ resp_result_length_mismatch = 'Result field length mismatch\n'
 resp_missing_username_or_password = 'Missing username or password\n'
 resp_logout = 'Logout success\n'
 resp_powermeter_fail = 'Powermeter not connected\n'
+resp_missing_powermeter_field = 'Missing powermeter field\n'
+resp_power_readings_stored = 'Readings stored in the server database\n'
+resp_power_readings_length_mismatch = 'Power readings field length mismatch\n'
+resp_csvsave_success = 'Submissions stored in csv file\n'
+resp_csvsave_fail = 'Error storing submissions in csv file\n'
 
 #++++++++++++++++++++++++++++++++ Start Flask and Database ++++++++++++++++++++++++++
 app = Flask(__name__)
@@ -271,7 +318,9 @@ db = SQLAlchemy(app)
 class User(UserMixin):
     # proxy for a database of users
     user_database = {"lpirc": ("lpirc", "pass"),
-                     "user_330": ("user_330", "pass@#$2249")}
+                     "user_330": ("user_330", "pass@#2249"),
+                     # Powermeter User
+                     powermeter_user: (powermeter_user, powermeter_password)}
  
     def __init__(self, username, password):
         self.id = username
@@ -294,10 +343,12 @@ class Session(db.Model):
     username = db.Column(db.String(80), unique=True)
     email = db.Column(db.String(120), unique=True)
     timestamp = db.Column(db.DateTime)
-    status = db.Column(db.String(120), unique=True)
+    status = db.Column(db.String(120))
     results = db.relationship('Result', backref='author', lazy='dynamic')
+    powermeter_readings = db.relationship('Powermeter', backref='author', lazy='dynamic')
 
-    def __init__(self, username, email, results=None, timestamp=None, status=None):
+    def __init__(self, username, email, results=None, timestamp=None, \
+                 status=None, powermeter_readings=None):
         self.username = username
         self.email = email
 
@@ -312,6 +363,10 @@ class Session(db.Model):
         if results is None:
             results = Result()
         self.results = [results]
+
+        if powermeter_readings is None:
+            powermeter_readings = Powermeter()
+        self.powermeter_readings = [powermeter_readings]
 
     def __repr__(self):
         return '<Session %r>' % self.username
@@ -330,9 +385,22 @@ class Result(db.Model):
     timestamp = db.Column(db.DateTime)
     user_id = db.Column(db.Integer, db.ForeignKey('session.id'))
 
-
     def __repr__(self):
         return '<Result %r>' % (self.image)
+
+
+# Powermeter database is associated with a session
+class Powermeter(db.Model):
+    id = db.Column(db.Integer, primary_key = True)
+    voltage = db.Column(db.String(40))
+    current = db.Column(db.String(40))
+    active_power = db.Column(db.String(40))
+    accumulated_energy = db.Column(db.String(40))
+    elapsed_time = db.Column(db.String(40))
+    user_id = db.Column(db.Integer, db.ForeignKey('session.id'))
+
+    def __repr__(self):
+        return '<Powermeter %r>' % (self.elapsed_time)
 
 
 #++++++++++++++++++++++++++++++++ Root url - Response +++++++++++++++++++++++++++++++++++
@@ -361,16 +429,19 @@ def login_check():
     	rx_password = request.form[ff_password]
     except:
 	return Response(response=resp_missing_username_or_password, status=401) # Unauthorized
-    # Validate username and password
-    if verify_user_entry(rx_username,rx_password) is None:
-        return Response(response=resp_login_fail, status=401) # Unauthorized
-    else:
+
+    try:
+        # Validate username and password
+        if verify_user_entry(rx_username,rx_password) is None:
+            return Response(response=resp_login_fail, status=401) # Unauthorized
         # Start Powermeter
-        if ((enable_powermeter == 1) and (powermeter_start() is not None)):
+        if ((enable_powermeter == 1) and (powermeter_start(rx_username) is not None)):
             return Response(response=resp_powermeter_fail, status=500)
         # Generate time limited token
         token = generate_token(rx_username,rx_password)
         return Response(response=token, status=200)
+    except:
+	return Response(response=resp_login_fail, status=500) # Internal
 
 
 #++++++++++++++++++++++++++++++++ Logout - Response +++++++++++++++++++++++++++++
@@ -483,6 +554,66 @@ def store_result():
 
         except:
             return Response(response=resp_result_length_mismatch, status=406)
+
+#++++++++++++++++++++++++++++++++ Submissions saveas csv file++++++++++++++++++++++++++++
+@app.route(url_csvsave_submissions, methods=['post'])
+def saveas_csvfile():
+    token = request.form[ff_token]
+    if get_username(token) != powermeter_user:
+        return Response(response=resp_invalid_token, status=401)
+    elif verify_user_token(token) is None:
+        return Response(response=resp_invalid_token, status=401)
+    else:
+        # Get player name
+        try:
+            t_player = request.form.getlist(ff_player)
+            this_player = t_player[0]
+            write_csvfiles(this_player)
+            return Response(response=resp_csvsave_success, status=200)
+        except:
+            return Response(response=resp_csvsave_fail, status=406)
+
+        
+
+#++++++++++++++++++++++++++++++++ Log Powermeter readings++++++++++++++++++++++++++++++++
+@app.route(url_post_powermeter_readings, methods=['post'])
+def store_powermeter_readings():
+    token = request.form[ff_token]
+    if get_username(token) != powermeter_user:
+        return Response(response=resp_invalid_token, status=401)
+    elif verify_user_token(token) is None:
+        return Response(response=resp_invalid_token, status=401)
+    else:
+        # Read powermeter readings
+        try:
+            t_player = request.form.getlist(ff_player)
+            t_voltage = request.form.getlist(ff_voltage)
+            t_current = request.form.getlist(ff_current)
+            t_power = request.form.getlist(ff_power)
+            t_energy = request.form.getlist(ff_energy)
+            t_elapsed = request.form.getlist(ff_elapsed)
+        except:
+            return Response(response=resp_missing_powermeter_field, status=406)
+
+        # Update powermeter database
+        this_player = t_player[0]
+        sess = Session.query.filter_by(username=this_player).first()
+        t_count = len(t_player)
+        try:
+            for k in range(0,t_count):
+                if t_player[k] != this_player:
+                    return Response(response=resp_power_readings_length_mismatch, status=406)
+                    
+                t_pmr = Powermeter(voltage = t_voltage[k], current = t_current[k], \
+                                   active_power = t_power[k], accumulated_energy = t_energy[k], \
+                                   elapsed_time = t_elapsed[k], author=sess)
+                db.session.add(t_pmr)
+
+            db.session.commit()
+            return Response(response=resp_power_readings_stored, status=200)
+
+        except:
+            return Response(response=resp_power_readings_length_mismatch, status=406)
 
 
 
@@ -598,7 +729,11 @@ def delete_lpirc_session(a_username):
     if s is None:    # No session entry exists
         print "No lpirc session exists for {}\n".format(a_username)
     else:
+        r_db = Result.query.filter(Result.user_id == s.id).delete()
+        pm_db = Powermeter.query.filter(Powermeter.user_id == s.id).delete()
         db.session.delete(s)
+        # db.session.delete(r_db)
+        # db.session.delete(pm_db)
         db.session.commit()
         print "lpirc session deleted for {}\n".format(a_username)
 
@@ -630,7 +765,10 @@ def powermeter_ping():
     return None
 
 # Powermeter start
-def powermeter_start():
+def powermeter_start(t_player):
+    if t_player == powermeter_user:
+        return None
+
     if powermeter_ping() is not None:
         print "Powermeter communication error\n"
         return "Error"
@@ -639,6 +777,13 @@ def powermeter_start():
         return "Error"
 
     pm_command_line = get_pmc_default_arg()
+    # http client related
+    pm_command_line += "\t" + pmc_cmd_host_ip + "\t" + host_ipaddress
+    pm_command_line += "\t" + pmc_cmd_host_port + "\t" + host_port
+    pm_command_line += "\t" + pmc_cmd_user + "\t" + powermeter_user
+    pm_command_line += "\t" + pmc_cmd_password + "\t" + powermeter_password
+    pm_command_line += "\t" + pmc_cmd_player + "\t" + t_player
+    pm_command_line += "\t" + pmc_cmd_start
     # Perform system call
     t_out = system_popen_execute(pm_command_line)
     if t_out is not None:
@@ -709,7 +854,70 @@ def system_popen_execute(a_args, a_wait_for_it=None):
         return "Error" # sys.exit(2) # Abnormal termination
 
     return None
+
+
+#++++++++++++++++++++++++++++++++++++ CSV Related ++++++++++++++++++++++++++++++++++
+def write_csvfiles(this_player=None):
+    # saveas player_name.csv
+    player_list = []
+    if not this_player:
+        all_sess = Session.query.filter(Session.username != powermeter_user).all()
+        for sess in all_sess:
+            player_list.append(sess.username)
+        print "Saving all submissions and powermeter readings\n"
+    else:
+        player_list.append(this_player)
+        print "Saving csv file for player:{}".format(this_player)
+
+    # Delete all empty entries
+    rdb = Result.query.filter(Result.xmin == None).delete()
+    pdb = Powermeter.query.filter(Powermeter.voltage == None).delete()
+    db.session.commit()
     
+    # Saving submissions and powermeter readings
+    for player in player_list:
+        all_result_rows = []
+        all_power_rows = []
+        
+        mysess = Session.query.filter_by(username = player).first()
+        myresults = Result.query.filter_by(author = mysess).all()
+        for eachresult in myresults:
+            each_result_row = [eachresult.image, \
+                               eachresult.class_id, \
+                               eachresult.confidence, \
+                               eachresult.xmin, \
+                               eachresult.ymin, \
+                               eachresult.xmax, \
+                               eachresult.ymax]
+            all_result_rows.append(each_result_row)
+            
+        mypowers = Powermeter.query.filter_by(author = mysess).all()
+        for eachpower in mypowers:
+            each_power_row = [eachpower.voltage, \
+                              eachpower.current, \
+                              eachpower.active_power, \
+                              eachpower.accumulated_energy, \
+                              eachpower.elapsed_time]
+            all_power_rows.append(each_power_row)
+            
+        mycsv = player + ".csv"
+        resultcsvfile = os.path.join(lpirc_resultcsv_dir, mycsv)
+        powercsvfile = os.path.join(lpirc_powercsv_dir, mycsv)
+        
+        with open(resultcsvfile, 'wb') as fid:
+            writer = csv.writer(fid)
+            writer.writerows(all_result_rows)
+
+        with open(powercsvfile, 'wb') as fid:
+            writer = csv.writer(fid)
+            writer.writerows(all_power_rows)
+
+    
+    return "Success"
+
+
+
+#------------------------- Input Parsing ---------------------------------    
 
 # Script usage function
 def usage():
@@ -738,13 +946,16 @@ def init_global_vars():
     total_number_images = len(glob.glob(test_images_dir_wildcard))
     print "Found %d test images in %s \n" % (total_number_images, test_images_dir_wildcard)
 
-    # Reset powermeter
-    if enable_powermeter == 1:
-        if powermeter_hard_reset() is not None:
-            print "Error resetting powermeter\n"
-            sys.exit(2)
-        
+    # Check if windows for powermeter
+    if (enable_powermeter == 1) and (sys.platform != 'win32'):
+        print "Powermeter requires Windows environment\n"
+        sys.exit(2)
 
+    # Reset powermeter
+    if (enable_powermeter == 1) and (powermeter_soft_reset() is not None):
+        print "Error resetting powermeter\n"
+        sys.exit(2)
+        
     return
 
 
