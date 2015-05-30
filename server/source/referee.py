@@ -951,10 +951,10 @@ def init_global_vars():
         print "Powermeter requires Windows environment\n"
         sys.exit(2)
 
-    # Reset powermeter
-    if (enable_powermeter == 1) and (powermeter_soft_reset() is not None):
-        print "Error resetting powermeter\n"
-        sys.exit(2)
+    # # Reset powermeter
+    # if (enable_powermeter == 1) and (powermeter_soft_reset() is not None):
+    #     print "Error resetting powermeter\n"
+    #     sys.exit(2)
         
     return
 
@@ -1031,6 +1031,7 @@ def parse_xml_config():
     global server_secret_key
     global timeout
     global lpirc_db
+    global enable_powermeter
 
     xml_config_file = os.path.join(this_file_path, './config.xml')
     xml_root = 'Server_Config'
@@ -1042,6 +1043,7 @@ def parse_xml_config():
     xml_database_dir = 'Database_Dir'
     xml_debug_mode = 'Debug_Mode'
     xml_timeout = 'Timeout'
+    xml_enable_powermeter = 'Enable_Powermeter'
 
     try:
         import xml.etree.ElementTree as ET
@@ -1059,10 +1061,20 @@ def parse_xml_config():
         else:
             mode_debug = 'None'
 
+        val = root.find('./'+xml_child+'/'+xml_enable_powermeter).text
+        if val == 'True':
+            enable_powermeter = 1
+        else:
+            enable_powermeter = 0
+
         print "\nhost = "+host_ipaddress+":"+host_port+"\nTest Images = "+\
             test_images_dir_wildcard+"\nTest Result = "+test_result+"\nDebug Mode  = "+\
             mode_debug+"\nTimeout  = "+str(timeout)+\
             "\nDatabase = "+lpirc_db+"\n" 
+        if enable_powermeter == 1:
+            print "Powermeter Enabled\n"
+        else:
+            print "Powermeter Disabled\n"        
 
     except:
         print "XML Parsing error\n"

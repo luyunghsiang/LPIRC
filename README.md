@@ -11,12 +11,13 @@ python client.py -w 128.46.75.108 --user lpirc --pass pass
 ## LPIRC Referee Server 
 @2015 - HELPS, Purdue University
 
-### TO-DO:
----------
-1. Exporting data from database to csv file for post processing
-
 ### Changes:
 -----------
+#### 5/30/2015
+1. Export database entries to csv file for post processing.
+2. Dump powermeter readings at an interval of 1 second to database
+
+#### 5/21/2015
 1. Powermeter integration.
     - Powermeter executable driver
 	- Powermeter python client
@@ -77,7 +78,7 @@ python client.py -w 128.46.75.108 --user lpirc --pass pass
 
 4. Check referee.py for options 
       python referee.py --help
-5. Host server 
+5. Host server (Debug mode)
       python referee.py --ip 127.0.0.1 --port 5000 --images "../images/*.jpg" --timeout 300
        - Hosts server at 127.0.0.1:5000, sending images (*.jpg) to client from directory "../images".
        - Session timeout of 300 seconds
