@@ -13,6 +13,9 @@ python client.py -w 128.46.75.108 --user lpirc --pass pass
 
 ### Changes:
 -----------
+#### 5/31/2015
+1. client.py - get_image(): image file write from 'w' to 'wb'
+
 #### 5/30/2015
 1. Export database entries to csv file for post processing.
 2. Dump powermeter readings at an interval of 1 second to database
@@ -39,14 +42,19 @@ python client.py -w 128.46.75.108 --user lpirc --pass pass
 1. Authenticate user and provide time limited token for the session.
      - Timeout is set to 5 minutes by default. 
      - If multiple attempts are made to login, all the previous data will be overwritten.
-2. Send images to token validated client devices upon GET request.
+2. Start the powermeter measurements.
+     - Powermeter accumulates the energy dissipated for a preset timeout.
+3. Send images to token validated client devices upon GET request.
+     - JPEG image format (*.jpg)
+     - Expects image index between 1 to N (Total images count) from the client.
+     - The client can query the available images count.
      - The image list in the local directory is refreshed every time before an image is sent.
      - This feature allows image directory to be modified with server running.
-3. Receive asynchronous post results for final evaluation.
+4. Receive asynchronous post results for final evaluation.
      - The results are stored in a database.
      - Database allows results to be stored for all users in a single file.
      - Only required user's data is written to a csv file for post processing
-4. Get power meter readings from powermeter.
+5. Get power meter readings from powermeter.
      - Powermeter readings are also stored in the same database.
 
 ### Requirements:
@@ -86,8 +94,8 @@ python client.py -w 128.46.75.108 --user lpirc --pass pass
 
 ### Usage:
 ----------
-referee.py [OPTION]...
-Options:
+referee.py [OPTION]
+
          -w, --ip
                 IP address of the server in format <xxx.xxx.xxx.xxx>
                 Default: 127.0.0.1
@@ -115,6 +123,9 @@ Options:
                 Client session timeout in seconds
                 Default: 300 seconds (5 Minutes)
 
+         --enable_powermeter
+                Enables powermeter
+
          -h, --help
                 Displays all the available option
 
@@ -133,39 +144,45 @@ Options:
             (post)      (token=[token])                      host/verify
 			                                                             Example: curl --data "token=daksldjsaldkjlkj32....." 127.0.0.1:5000/verify
 
-            (post)      (token=[token]&..
-			             image_name=[image_index])           host/image (Image index starts with 1: 1,2,3,...)
+            (post)      (token=[token])                      host/logout
+			                                                             Example: curl --data "token=daksldjsaldkjlkj32....." 127.0.0.1:5000/logout
+
+            (post)      (token=[token])                      host/no_of_images
+			                                                             Example: curl --data "token=daksldjsaldkjlkj32....." 127.0.0.1:5000/no_of_images
+
+            (post)      (token=[token]&image_name=[image_index])  host/image (Image index starts with 1: 1,2,3,...)
 			                                                             Example: curl --data "token=daks....&image_name=3" 127.0.0.1:5000/image
 
             (post)      (token=[token]&image_name=[image_index]&..
 			             CLASS_ID=[id]&confidence=[conf]&..
 						 xmin=[xmin]&xmax=[xmax]&..
 						 ymin=[ymin]&ymax=[ymax])            host/result
-															             Example: curl --data "token=daks....&
-																		                       image_name=3&
-																							   CLASS_ID=7&
-																							   confidence=0.38&
+																		Example: curl --data "token=daks....&image_name=3&
+																		                       CLASS_ID=7&confidence=0.38&
 																							   xmin=123.00&xmax=456.00&
-																							   ymin=132.00&ymax=756.00"  127.0.0.1:5000/result
+																							   ymin=132.00&ymax=756.00"     127.0.0.1:5000/result
+
+            (post)      (token=[token]&player=[player_name]&..
+			             voltage=[voltage]&current=[current]&..
+						 power=[power]&energy=[energy]&..
+						 elapsed=[elapsed_time])            host/powermeter
+																		Example: curl --data "token=daks....&player=lpirc&
+																							  voltage=120&current=0.1&
+																							  power=9&energy=45&
+																							  elapsed=5"     127.0.0.1:5000/powermeter
+
+            (post)      (token=[token]&player=[player_name])  host/savecsv (All submissions saved if no player_name)
+			                                                             Example: curl --data "token=daks....&player=lpirc" 127.0.0.1:5000/savecsv
 
 
 
+### Note:
+---------
+1. Image format: JPEG (*.jpg, *.JPEG)
+2. Image index starts from 1 (not 0).
+3. Command line arguments expect to be within quotes
+4. Use sql browser to view database (http://sqlitebrowser.org/)
 
-
-
-
-
-### Assumptions:
-----------------
-1. Image index starts from 1 (not 0).
-2. Command line arguments expect to be within quotes
-3. Use sql browser to view database (http://sqlitebrowser.org/)
-
-
-### Power Meter
-- To DO
-### Matlab Post-Processing
-- To DO
 
 ### Sample Client
 Sample Client performs the following operations:
@@ -226,7 +243,7 @@ Images are copied to the 'images' directory if and only if, Server replies with 
 
 6. Install mod_wsgi
    Ref: http://www.lfd.uci.edu/~gohlke/pythonlibs/#mod_wsgi
-   - pip install <.whl file>
+   - pip install (.whl file)
    - Copy generated mod_wsgi.so to modules/ under Apache
 
 7. Edit httpd.conf under C:/Apache24/conf
@@ -274,7 +291,7 @@ Images are copied to the 'images' directory if and only if, Server replies with 
 6. Install mod_wsgi
 
 7. Edit apache2.conf under /etc/apache2/
-   - Include <Abs path to lpirc_unix.conf>
+   - Include (Abs path to lpirc_unix.conf)
 
 8. Check absolute paths under lpirc_unix.conf and deploy.wsgi
 

@@ -191,7 +191,7 @@ def get_image(token, image_number):
 	except:
     		os.mkdir(image_directory)
 	# Image will be saved as a file
-	with open(temp_directory+'/'+str(image_number)+'.jpg', 'w') as f:
+	with open(temp_directory+'/'+str(image_number)+'.jpg', 'wb') as f:
     		c.setopt(c.WRITEDATA, f)
 		c.perform()
 		status = c.getinfo(pycurl.HTTP_CODE)

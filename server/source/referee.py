@@ -4,12 +4,6 @@ LPIRC Referee Server
 ====================
 @2015 - HELPS, Purdue University
 
-TO-DO:
-1. Power meter reading
-2. Exporting data from database to csv file for post processing
-
-
-
 Rules:
 1. If a single image has multiple bounding boxes, the client can send the bounding boxes in the same POST message.
 2. The client may send multiple POST messages for different bounding boxes of the same image.
@@ -23,14 +17,19 @@ Main Tasks:
 1. Authenticate user and provide time limited token for the session.
      - Timeout is set to 5 minutes by default. 
      - If multiple attempts are made to login, all the previous data will be overwritten.
-2. Send images to token validated client devices upon GET request.
+2. Start the powermeter measurements.
+     - Powermeter accumulates the energy dissipated for a preset timeout.
+3. Send images to token validated client devices upon GET request.
+     - JPEG image format (*.jpg)
+     - Expects image index between 1 to N (Total images count) from the client.
+     - The client can query the available images count.
      - The image list in the local directory is refreshed every time before an image is sent.
      - This feature allows image directory to be modified with server running.
-3. Receive asynchronous post results for final evaluation.
+4. Receive asynchronous post results for final evaluation.
      - The results are stored in a database.
      - Database allows results to be stored for all users in a single file.
      - Only required user's data is written to a csv file for post processing
-4. Get power meter readings from powermeter.
+5. Get power meter readings from powermeter.
      - Powermeter readings are also stored in the same database.
 
 Requirements:
@@ -110,9 +109,10 @@ Following URLs are recognized, served and issued:
 ------------------------------------------------
 Note:
 -----
-1. Image index starts from 1 (not 0).
-2. Command line arguments expect to be within quotes
-3. Use sql browser to view database (http://sqlitebrowser.org/)
+1. Image format: JPEG (*.jpg, *.JPEG)
+2. Image index starts from 1 (not 0).
+3. Command line arguments expect to be within quotes
+4. Use sql browser to view database (http://sqlitebrowser.org/)
 
 """
 import getopt, sys, re, glob, os                                          # Parser for command-line options
@@ -225,6 +225,9 @@ Valid URLs:
             (post)      (%s=[token])                      host%s
                                                              Example: curl --data "%s=daksldjsaldkjlkj32....." 127.0.0.1:5000%s
 
+            (post)      (%s=[token])                      host%s
+                                                             Example: curl --data "%s=daksldjsaldkjlkj32....." 127.0.0.1:5000%s
+
             (post)      (%s=[token]&%s=[image_index])  host%s (Image index starts with 1: 1,2,3,...)
                                                              Example: curl --data "%s=daks....&%s=3" 127.0.0.1:5000%s
 
@@ -258,6 +261,8 @@ Valid URLs:
      ff_token, url_verify_token, 
      ff_token, url_logout, 
      ff_token, url_logout, 
+     ff_token, url_no_of_images, 
+     ff_token, url_no_of_images, 
      ff_token, ff_image_index, url_get_image, 
      ff_token, ff_image_index, url_get_image, 
      ff_token, ff_image_index, 
