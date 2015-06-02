@@ -13,14 +13,18 @@ python client.py -w 128.46.75.108 --user lpirc --pass pass
 
 ### Changes:
 -----------
-#### 5/31/2015
+##### 6/1/2015
+1. Session logout functionality.
+2. Powermeter measurement stop.
+
+##### 5/31/2015
 1. client.py - get_image(): image file write from 'w' to 'wb'
 
-#### 5/30/2015
+##### 5/30/2015
 1. Export database entries to csv file for post processing.
 2. Dump powermeter readings at an interval of 1 second to database
 
-#### 5/21/2015
+##### 5/21/2015
 1. Powermeter integration.
     - Powermeter executable driver
 	- Powermeter python client
@@ -56,6 +60,8 @@ python client.py -w 128.46.75.108 --user lpirc --pass pass
      - Only required user's data is written to a csv file for post processing
 5. Get power meter readings from powermeter.
      - Powermeter readings are also stored in the same database.
+6. Stop the powermeter measurements upon timeout or client logout.
+7. Compute score based on the mAP and the energy dissipated. 
 
 ### Requirements:
 -----------------

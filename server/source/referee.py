@@ -462,6 +462,7 @@ def logout_session():
         return Response(response=resp_invalid_token, status=401) # Unauthorized
     else:
         credential = get_credential(token)
+        powermeter_stop()
         set_session_status(credential[ff_username], session_status_inactive)
         return Response(response=resp_logout, status=200)
 
@@ -765,6 +766,19 @@ def powermeter_ping():
     t_out = system_popen_execute(pm_command_line, "wait for it")
     if t_out is not None:
         print "Powermeter ping failed\n"
+        return "Error"
+
+    return None
+
+# Powermeter stop
+def powermeter_stop():
+    pm_command_line = get_pmc_default_arg()
+    pm_command_line += "\t" + pmc_cmd_stop
+
+    # Perform system call
+    t_out = system_popen_execute(pm_command_line, "wait for it")
+    if t_out is not None:
+        print "Powermeter stop failed\n"
         return "Error"
 
     return None

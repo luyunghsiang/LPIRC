@@ -55,6 +55,9 @@ Options:
          --pm_ping
                 Powermeter ping
 
+         --pm_stop
+                Powermeter stop
+
          --pm_hard_reset
                 Powermeter reset (Hardware)
 
