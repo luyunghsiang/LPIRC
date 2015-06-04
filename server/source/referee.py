@@ -215,11 +215,6 @@ pmc_cmd_host_port = '--host_port'
 powermeter_status_stop = 'powermeter_stopped'
 powermeter_status_start = 'powermeter_started'
 
-#++++++++++++++++++++++++++++++++ Shuffler ++++++++++++++++++++++++++++++++++
-shuffle_action_map = 'map'
-shuffle_action_demap = 'demap'
-
-
 #++++++++++++++++++++++++++++++++ Help URL - Response ++++++++++++++++++++++++++++++++++
 server_help_message = ("""
 Valid URLs:
@@ -483,6 +478,7 @@ def login_check():
 
         # Start Powermeter
         if ((enable_powermeter == 1) and (powermeter_start(rx_username) is not None)):
+            delete_lpirc_session(rx_username)
             return Response(response=resp_powermeter_fail, status=500)
 
         return Response(response=token, status=200)
@@ -1016,35 +1012,6 @@ def write_csvfiles(this_player=None):
 
     
     return "Success"
-
-
-
-
-#------------------------- LPIRC Shuffler ---------------------------------    
-
-def shuffler(t_indexp1_list, t_N, t_seed, t_wlen, t_action=None):
-    mapped_index_list = []
-    N_windows = int(math.ceil(float(t_N)/t_wlen))
-    random.seed(t_seed)
-    random_shifters = random.sample(xrange(N_windows), N_windows)
-
-    for t_indexp1 in t_indexp1_list:
-        t_index = t_indexp1 - 1
-        k_window = int(t_index/t_wlen)
-        if k_window == (N_windows - 1): # Last window do nothing
-            mapped_index_list.append(t_indexp1)
-            continue
-
-        window_head = k_window*t_wlen
-        if (t_action is None) or (t_action == shuffle_action_map):
-            mapped_index = ((t_index - window_head) + random_shifters[k_window])%t_wlen + window_head
-        else:
-            mapped_index = ((t_index - window_head) - random_shifters[k_window])%t_wlen + window_head
-
-        mapped_index_list.append(mapped_index + 1)
-        
-
-    return mapped_index_list
 
 
 
