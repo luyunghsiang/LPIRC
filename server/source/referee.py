@@ -101,6 +101,9 @@ Options:
          --enable_powermeter
                 Enables powermeter
 
+         --recycle
+                Over write database for subsequent logins
+
          -h, --help
                 Displays all the available option
 
@@ -140,6 +143,8 @@ mode_debug = 'None' #'None'
 server_secret_key = 'ITSASECRET'
 timeout = 300 #seconds
 lpirc_db = os.path.join(this_file_path, '../database/lpirc.db')
+
+recycle_db = 0
 
 enable_powermeter = 0
 powermeter_client = os.path.join(this_file_path, '../powermeter/wt310_client.py')
@@ -206,6 +211,14 @@ pmc_cmd_start = '--pm_start'
 pmc_cmd_stop = '--pm_stop'
 pmc_cmd_host_ip = '--host_ip'
 pmc_cmd_host_port = '--host_port'
+
+powermeter_status_stop = 'powermeter_stopped'
+powermeter_status_start = 'powermeter_started'
+
+#++++++++++++++++++++++++++++++++ Shuffler ++++++++++++++++++++++++++++++++++
+shuffle_action_map = 'map'
+shuffle_action_demap = 'demap'
+
 
 #++++++++++++++++++++++++++++++++ Help URL - Response ++++++++++++++++++++++++++++++++++
 server_help_message = ("""
@@ -324,6 +337,11 @@ class User(UserMixin):
     # proxy for a database of users
     user_database = {"lpirc": ("lpirc", "pass"),
                      "user_330": ("user_330", "pass@#2249"),
+                     "user1": ("user1", "pass1"),
+                     "user2": ("user2", "pass2"),
+                     "user3": ("user3", "pass3"),
+                     "user4": ("user4", "pass4"),
+                     "user5": ("user5", "pass5"),
                      # Powermeter User
                      powermeter_user: (powermeter_user, powermeter_password)}
  
@@ -349,13 +367,33 @@ class Session(db.Model):
     email = db.Column(db.String(120), unique=True)
     timestamp = db.Column(db.DateTime)
     status = db.Column(db.String(120))
+    powermeter_status = db.Column(db.String(120))
+    token = db.Column(db.String(200))
+    mytimeout = db.Column(db.Integer)
+    image_count = db.Column(db.Integer)
     results = db.relationship('Result', backref='author', lazy='dynamic')
     powermeter_readings = db.relationship('Powermeter', backref='author', lazy='dynamic')
 
     def __init__(self, username, email, results=None, timestamp=None, \
-                 status=None, powermeter_readings=None):
+                 status=None, powermeter_readings=None, \
+                 powermeter_status=None, token=None, \
+                 mytimeout=None, image_count=None):
         self.username = username
         self.email = email
+
+        self.token = token
+
+        if image_count is None:
+            image_count = 0
+        self.image_count = image_count
+
+        if mytimeout is None:
+            mytimeout = timeout
+        self.mytimeout = mytimeout
+
+        if powermeter_status is None:
+            powermeter_status = powermeter_status_start    
+        self.powermeter_status = powermeter_status
 
         if status is None:
             status = session_status_active
@@ -439,11 +477,14 @@ def login_check():
         # Validate username and password
         if verify_user_entry(rx_username,rx_password) is None:
             return Response(response=resp_login_fail, status=401) # Unauthorized
+
+        # Generate time limited token
+        token = generate_token(rx_username,rx_password)
+
         # Start Powermeter
         if ((enable_powermeter == 1) and (powermeter_start(rx_username) is not None)):
             return Response(response=resp_powermeter_fail, status=500)
-        # Generate time limited token
-        token = generate_token(rx_username,rx_password)
+
         return Response(response=token, status=200)
     except:
 	return Response(response=resp_login_fail, status=500) # Internal
@@ -665,12 +706,9 @@ def verify_user_token(a_token):
         return None
     else:
         # Verify if timeout
-        dt = datetime.strptime(credential[ff_timestamp], datetime_format)
-        elapsed = datetime.now()-dt
-        if elapsed.total_seconds() > timeout:
+        if check_session_timeout(credential[ff_username], credential[ff_timestamp]) == 1:
             # Set session status - Timeout
             set_session_status(credential[ff_username], session_status_timeout)
-            print "Elapsed Time = {}".format(elapsed.total_seconds())
             return None
         else:
             return "Valid"
@@ -681,9 +719,15 @@ def generate_token(a_username,a_password):
     if valid_lpirc_session(a_username) is None:
         create_lpirc_session(a_username)
     else:
-        # Should be a penalty for multiple login attempts
-        delete_lpirc_session(a_username)
-        create_lpirc_session(a_username)
+        # Session already created, nothing to do send previously generated token
+        if recycle_db != 1:
+            sess = Session.query.filter_by(username=a_username).first()
+            token = sess.token
+            return token
+        else: # Recycle
+            # Should be a penalty for multiple login attempts
+            delete_lpirc_session(a_username)
+            create_lpirc_session(a_username)
 
     sess = Session.query.filter_by(username=a_username).first()
     s = JSONWebSignatureSerializer(server_secret_key)
@@ -692,10 +736,39 @@ def generate_token(a_username,a_password):
     print dt_str
     # Adding session created time for timeout validation
     token = s.dumps({ff_username: a_username, ff_password: a_password, ff_timestamp: dt_str})
+    # Update session database
+    sess.token = token
+    if (enable_powermeter == 1) and (a_username != powermeter_user):
+        sess.powermeter_status = powermeter_status_stop # So that, it can be restarted later
+
+    if a_username == powermeter_user:
+        sess.mytimeout = sys.maxint
+
+    db.session.commit()
     return token
+
+
+# Check if session timed out
+def check_session_timeout(a_username, a_timestamp):
+    sess = Session.query.filter_by(username=a_username).first()    
+
+    # Verify if timeout
+    dt = datetime.strptime(a_timestamp, datetime_format)
+    elapsed = datetime.now() - dt
+    if elapsed.total_seconds() > sess.mytimeout:
+        print "Elapsed Time = {}".format(elapsed.total_seconds())
+        return 1
+    else:
+        return 0
+
+
 
 # Set session status -> active, inactive, idle, timeout
 def set_session_status(a_username, a_status):
+    # Powermeter user always logged in
+    if a_username == powermeter_user:
+        return
+
     sess = Session.query.filter_by(username=a_username).first()
     sess.status = a_status
     db.session.commit()
@@ -788,6 +861,11 @@ def powermeter_start(t_player):
     if t_player == powermeter_user:
         return None
 
+    sess = Session.query.filter_by(username=t_player).first()
+    if sess.powermeter_status == powermeter_status_start:     # Powermeter already started, nothing to do
+        return None
+
+
     if powermeter_ping() is not None:
         print "Powermeter communication error\n"
         return "Error"
@@ -808,6 +886,11 @@ def powermeter_start(t_player):
     if t_out is not None:
         print "Powermeter start failed\n"
         return "Error"
+    
+    # Powermeter started successfully, update database
+    sess = Session.query.filter_by(username=t_player).first()
+    sess.powermeter_status = powermeter_status_start
+    db.session.commit()
 
     return None
 
@@ -936,6 +1019,36 @@ def write_csvfiles(this_player=None):
 
 
 
+
+#------------------------- LPIRC Shuffler ---------------------------------    
+
+def shuffler(t_indexp1_list, t_N, t_seed, t_wlen, t_action=None):
+    mapped_index_list = []
+    N_windows = int(math.ceil(float(t_N)/t_wlen))
+    random.seed(t_seed)
+    random_shifters = random.sample(xrange(N_windows), N_windows)
+
+    for t_indexp1 in t_indexp1_list:
+        t_index = t_indexp1 - 1
+        k_window = int(t_index/t_wlen)
+        if k_window == (N_windows - 1): # Last window do nothing
+            mapped_index_list.append(t_indexp1)
+            continue
+
+        window_head = k_window*t_wlen
+        if (t_action is None) or (t_action == shuffle_action_map):
+            mapped_index = ((t_index - window_head) + random_shifters[k_window])%t_wlen + window_head
+        else:
+            mapped_index = ((t_index - window_head) - random_shifters[k_window])%t_wlen + window_head
+
+        mapped_index_list.append(mapped_index + 1)
+        
+
+    return mapped_index_list
+
+
+
+
 #------------------------- Input Parsing ---------------------------------    
 
 # Script usage function
@@ -992,11 +1105,13 @@ def parse_cmd_line():
     global timeout
     global lpirc_db
     global enable_powermeter
+    global recycle_db
 
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "port=", "images=", "result=", \
                                                            "debug", "secret=", \
                                                            "enable_powermeter", \
+                                                           "recycle", \
                                                            "timeout="])
     except getopt.GetoptError as err:
         # print help information and exit:
@@ -1023,6 +1138,8 @@ def parse_cmd_line():
             timeout = int(val)
         elif switch == "--enable_powermeter":
             enable_powermeter = 1
+        elif switch == "--recycle":
+            recycle_db = 1
         else:
             assert False, "unhandled option"
 
@@ -1034,6 +1151,9 @@ def parse_cmd_line():
         print "Powermeter Enabled\n"
     else:
         print "Powermeter Disabled\n"        
+
+    if recycle_db == 1:
+        print "Database overwritten for subsequent logins\n"
 
 
 
