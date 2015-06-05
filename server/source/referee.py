@@ -861,6 +861,7 @@ def powermeter_start(t_player):
     if sess.powermeter_status == powermeter_status_start:     # Powermeter already started, nothing to do
         return None
 
+    delete_lpirc_session(powermeter_user)
 
     if powermeter_ping() is not None:
         print "Powermeter communication error\n"
@@ -998,9 +999,10 @@ def write_csvfiles(this_player=None):
                               eachpower.elapsed_time]
             all_power_rows.append(each_power_row)
             
-        mycsv = player + ".csv"
-        resultcsvfile = os.path.join(lpirc_resultcsv_dir, mycsv)
-        powercsvfile = os.path.join(lpirc_powercsv_dir, mycsv)
+        mycsv_result = player + "_result.csv"
+        mycsv_power = player + "_power.csv"
+        resultcsvfile = os.path.join(lpirc_resultcsv_dir, mycsv_result)
+        powercsvfile = os.path.join(lpirc_powercsv_dir, mycsv_power)
         
         with open(resultcsvfile, 'wb') as fid:
             writer = csv.writer(fid)
