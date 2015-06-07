@@ -297,6 +297,7 @@ resp_login_fail = 'Invalid username or password\n'
 resp_invalid_token = 'Invalid Token\n'
 resp_valid_token = 'Valid Token\n'
 resp_invalid_image_index = 'Invalid Image index\n'
+resp_image_not_found = 'Image not found\n'
 resp_image_index_out_of_range = 'Image index out of range\n'
 resp_image_dir_not_exist = 'Image directory does not exist\n'
 resp_missing_result_field = 'Missing result field\n'
@@ -368,11 +369,13 @@ class Session(db.Model):
     image_count = db.Column(db.Integer)
     results = db.relationship('Result', backref='author', lazy='dynamic')
     powermeter_readings = db.relationship('Powermeter', backref='author', lazy='dynamic')
+    imageinfo = db.relationship('Imageset', backref='author', lazy='dynamic')
 
     def __init__(self, username, email, results=None, timestamp=None, \
                  status=None, powermeter_readings=None, \
                  powermeter_status=None, token=None, \
-                 mytimeout=None, image_count=None):
+                 mytimeout=None, image_count=None, \
+                 imageinfo=None):
         self.username = username
         self.email = email
 
@@ -405,6 +408,10 @@ class Session(db.Model):
         if powermeter_readings is None:
             powermeter_readings = Powermeter()
         self.powermeter_readings = [powermeter_readings]
+
+        if imageinfo is None:
+            imageinfo = Imageset()
+        self.imageinfo = [imageinfo]
 
     def __repr__(self):
         return '<Session %r>' % self.username
@@ -439,6 +446,18 @@ class Powermeter(db.Model):
 
     def __repr__(self):
         return '<Powermeter %r>' % (self.elapsed_time)
+
+
+# Imageset database is associated with a session
+class Imageset(db.Model):
+    id = db.Column(db.Integer, primary_key = True)
+    image_id = db.Column(db.String(40))
+    image_fullname = db.Column(db.String(200))
+    timestamp = db.Column(db.DateTime)
+    user_id = db.Column(db.Integer, db.ForeignKey('session.id'))
+
+    def __repr__(self):
+        return '<Imageset %r>' % (self.image_id)
 
 
 #++++++++++++++++++++++++++++++++ Root url - Response +++++++++++++++++++++++++++++++++++
@@ -532,14 +551,38 @@ def send_image():
         image_index = int(image_index_str)
         if (image_index <= 0) or (image_index > len(list_of_images)):
             return Response(response=resp_image_index_out_of_range, status=406) # Not Acceptable
-        # Assuming image index starts with 1. example: 1,2,3,....
-        image_index -= 1
 
-        # List all images in directory
-        list_of_images = glob.glob(test_images_dir_wildcard)
+        # For custom shuffling
+        myindex = image_index # For lpirc shuffle
+        my_imagefile = str(myindex)+".jpg"
+        my_full_imagename = os.path.join(os.path.dirname(test_images_dir_wildcard), my_imagefile)
+        if not os.path.isfile(my_full_imagename):
+            return Response(response=resp_image_not_found, status=500) # Not Acceptable
+
+        # Update imageset database
+        t_user = get_username(token)
+        sess = Session.query.filter_by(username=t_user).first()
+        t_iminfo = Imageset(image_id=str(myindex), \
+                            image_fullname=my_full_imagename, \
+                            timestamp=datetime.utcnow(), \
+                            author=sess)
+
+        db.session.add(t_iminfo)
+        db.session.commit()
+
         # Flask send file expects split directory arguments
-        split_path_image = os.path.split(list_of_images[image_index])
+        split_path_image = os.path.split(my_full_imagename)
         return send_from_directory(split_path_image[0], split_path_image[1], as_attachment=True)        
+        
+
+        # # Assuming image index starts with 1. example: 1,2,3,....
+        # image_index -= 1      # For index in range (0, N-1)
+
+        # # List all images in directory
+        # list_of_images = glob.glob(test_images_dir_wildcard)
+        # # Flask send file expects split directory arguments
+        # split_path_image = os.path.split(list_of_images[image_index])
+        # return send_from_directory(split_path_image[0], split_path_image[1], as_attachment=True)        
 
 
 #++++++++++++++++++++++++++++++++ Total number of images - Response ++++++++++++++++++++++++++++++++
@@ -806,6 +849,7 @@ def delete_lpirc_session(a_username):
     else:
         r_db = Result.query.filter(Result.user_id == s.id).delete()
         pm_db = Powermeter.query.filter(Powermeter.user_id == s.id).delete()
+        im_db = Imageset.query.filter(Imageset.user_id == s.id).delete()
         db.session.delete(s)
         # db.session.delete(r_db)
         # db.session.delete(pm_db)
@@ -1043,7 +1087,20 @@ def init_global_vars():
     if re.search('[\*\.]', image_wildcard) == None:     # Still Folder name or empty
         assert os.path.exists(test_images_dir_wildcard), test_images_dir_wildcard+'--'+resp_image_dir_not_exist
         test_images_dir_wildcard = os.path.join(test_images_dir_wildcard, '*.*')
-        
+
+    # For LPIRC shuffling, check if all are of the form number.jpg
+    for image_filename in glob.glob(test_images_dir_wildcard):
+        myname = os.path.split(image_filename)[1]
+        match = re.search(".*[^0-9].*\.jpg", myname)
+        if match: # All filenames should be numbers
+            print "Expect all filenames to be numbers\n"
+            sys.exit(2)
+        match = re.search("0&.*\.jpg", myname)        
+        if match: # Leading zeros
+            print "Leading zeros present in filename\n"
+            sys.exit(2)
+
+
     total_number_images = len(glob.glob(test_images_dir_wildcard))
     print "Found %d test images in %s \n" % (total_number_images, test_images_dir_wildcard)
 
