@@ -5,6 +5,7 @@
 */
 
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include "settings.h"
 #include "parameters.h"
@@ -22,15 +23,19 @@ int main(int argc, char **argv){
 
 	/* Yokogawa controller*/
 	yokogawa.init_ctl(wt310_settings);
-	if (wt310_settings.initialize){
+	if ((wt310_settings.soft_reset) || (wt310_settings.hard_reset)){
 		cout << "Elapsed Time:\t" << wt310_settings.elapsed_time() << "seconds" << endl;
 		exit(EXIT_SUCCESS);
 	}
 	yokogawa.integrator_reset();
 	yokogawa.integrator_start();
+	ofstream myfile;
+	myfile.open(&wt310_settings.csv_file[0]);
+	myfile << "Voltage (V), Current (A), Active Power (Watt), Accumulated Energy (Watt-Hour), Elapsed Time (Seconds)\n";
+	myfile.close();
 	yokogawa.poll_data(wt310_settings, wt310_params);
 	yokogawa.integrator_stop();
-	wt310_params.write_csv(wt310_settings.csv_file);
+	//wt310_params.write_csv(wt310_settings.csv_file);
 
 	cout << "Elapsed Time:\t" << wt310_settings.elapsed_time() << "seconds" << endl;
 

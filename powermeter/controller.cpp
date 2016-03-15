@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <chrono>
 #include <thread>
 #include "controller.h"
@@ -57,9 +58,16 @@ int pm_controller::init_ctl(pm_settings const& settings_t){
 
 	/* Set ip address*/
 	set_ipaddress(settings_t.ipaddress);
+	if (settings_t.ping){
+		exit(EXIT_SUCCESS);
+	}
+	if (settings_t.stop == 1){
+		integrator_stop();
+		exit(EXIT_SUCCESS);
+	}
 
 	/* Hard Reset power meter*/
-	if (settings_t.initialize){
+	if (settings_t.hard_reset){
 		rst_ctl();
 	}
 
@@ -476,15 +484,25 @@ int pm_controller::update_data_memory(pm_parameters& params_t){
 int pm_controller::poll_data(pm_settings const& settings_t, pm_parameters& params_t){
 	int ret;
 	int update_rate = settings_t.data_update_interval;
-	int timeout = settings_t.log_duration + 2;
+	int timeout = settings_t.log_duration;
 	mytime polltime;
 
-	while (polltime.elapsed_seconds() < timeout){
+	while ((polltime.elapsed_seconds() < timeout) && (integrator_state() == i_start)){
 		update_data_memory(params_t);
+		/* Write to output file */
+		params_t.write_csv_cont(settings_t.csv_file);
 		/* Wait for data update interval*/
 		std::this_thread::sleep_for(std::chrono::seconds(update_rate));
 		cout << polltime.elapsed_seconds() << "seconds" << endl;
 	}
+
+	/*Read remnants*/
+	update_data_memory(params_t);
+	/* Write to output file */
+	params_t.write_csv_cont(settings_t.csv_file);
+	/* Wait for data update interval*/
+	std::this_thread::sleep_for(std::chrono::seconds(update_rate));
+	cout << polltime.elapsed_seconds() << "seconds" << endl;
 
 	return 1;
 }

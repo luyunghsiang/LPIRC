@@ -22,7 +22,7 @@ Requirements:
 
 Usage:
 ------
-referee.py [OPTION]...
+wt310_client.py [OPTION]...
 Options:
          -w, --pmip
                 IP address of the powermeter in format <xxx.xxx.xxx.xxx>

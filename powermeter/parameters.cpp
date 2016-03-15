@@ -61,6 +61,37 @@ int pm_parameters::write_csv(string filename){
 	return 1;
 }
 
+int pm_parameters::write_csv_cont(string filename){
+	int ret;
+	vector<time_t> ts_all;
+	vector<double> v_all, i_all, p_all, e_all, it_all;
+
+	voltage.get_timestamp_all(ts_all);
+	voltage.get_data_all(v_all);
+	current.get_data_all(i_all);
+	power.get_data_all(p_all);
+	energy.get_data_all(e_all);
+	itime.get_data_all(it_all);
+
+	/*Verify size match*/
+	if ((ts_all.size() != v_all.size()) || (ts_all.size() != i_all.size()) || (ts_all.size() != p_all.size()) || \
+		(ts_all.size() != e_all.size()) || (ts_all.size() != it_all.size())){
+		cout << "Size mismatch" << endl;
+		exit(EXIT_FAILURE);
+	}
+
+	/*Write to csv file*/
+	ofstream myfile;
+	myfile.open(&filename[0], std::ostream::out | std::ostream::app);
+	int i = v_all.size() - 1;
+	myfile << v_all[i] << ",\t" << i_all[i] << ",\t" << \
+		p_all[i] << ",\t" << e_all[i] << ",\t" << \
+		it_all[i] << "\n";
+	myfile.close();
+
+	return 1;
+}
+
 int pm_parameters::push_value(vector<double> const& v_t, e_wt_functions item){
 	int status;
 

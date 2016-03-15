@@ -18,9 +18,10 @@ string cmd_csv_file = "csv";
 string cmd_data_update_interval = "interval";
 string cmd_mode = "mode";
 string cmd_help = "help";
-string cmd_init = "init";
-string cmd_integrate = "integrate";
-
+string cmd_ping = "PING";
+string cmd_stop = "STOP";
+string cmd_hard_reset("HARD_RESET");
+string cmd_soft_reset("SOFT_RESET");
 
 void pm_settings::print_help(){
 
@@ -33,14 +34,18 @@ void pm_settings::print_help(){
 		"\t--" << cmd_csv_file << "\t<wt310.csv>" << endl <<
 		"\t--" << cmd_data_update_interval << "\t<1> seconds" << endl <<
 		"\t--" << cmd_mode << "\t[" << K_mode_rms << "|" << K_mode_dc << "]" << endl <<
-		"\t--" << cmd_init << "\tInitialize powermeter driver" << endl <<
-		"\t--" << cmd_integrate << "\tStart Integration" << endl <<
+		"\t--" << cmd_ping << "\tPing powermeter" << endl <<
+		"\t--" << cmd_hard_reset << "\tPowermeter hard reset" << endl <<
+		"\t--" << cmd_soft_reset << "\tPowermeter soft reset" << endl <<
+		"\t--" << cmd_stop << "\tPowermeter stop" << endl <<
 		endl;
 }
 
 pm_settings::pm_settings(){
-	initialize = 0;
-	integrate = 0;
+	stop = 0;
+	ping = 0;
+	hard_reset = 0;
+	soft_reset = 0;
 	begin_time = clock();
 	ipaddress = "192.168.1.3";
 	interface = K_inf_ethernet;
@@ -84,14 +89,16 @@ int pm_settings::parse_cmd_line(int argc, char **argv){
 			{ &cmd_data_update_interval[0u], required_argument, 0, 'u' },
 			{ &cmd_mode[0u], required_argument, 0, 'm' },
 			{ &cmd_help[0u], no_argument, 0, 'h' },
-			{ &cmd_init[0u], no_argument, 0, 't' },
-			{ &cmd_integrate[0u], no_argument, 0, 'g' },
+			{ &cmd_ping[0u], no_argument, 0, 'p' },
+			{ &cmd_stop[0u], no_argument, 0, 'x' },
+			{ &cmd_hard_reset[0u], no_argument, 0, 't' },
+			{ &cmd_soft_reset[0u], no_argument, 0, 's' },
 			{ 0, 0, 0, 0 }
 		};
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
-		c = getopt_long(argc, argv, "f:i:l:c:u:m:htg",
+		c = getopt_long(argc, argv, "f:i:l:c:u:m:hpxts",
 			long_options, &option_index);
 
 		/* Detect the end of the options. */
@@ -118,12 +125,20 @@ int pm_settings::parse_cmd_line(int argc, char **argv){
 			print_help();
 			exit(EXIT_SUCCESS);
 
-		case 't':
-			initialize = 1;
+		case 'p':
+			ping = 1;
 			break;
 
-		case 'g':
-			integrate = 1;
+		case 'x':
+			stop = 1;
+			break;
+
+		case 't':
+			hard_reset = 1;
+			break;
+
+		case 's':
+			soft_reset = 1;
 			break;
 
 		case 'l':

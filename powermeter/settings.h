@@ -25,8 +25,10 @@ public:
 	string mode;				// RMS, DC
 	int data_update_interval;
 	string csv_file;
-	int initialize;
-	int integrate;
+	int ping;
+	int hard_reset;
+	int soft_reset;
+	int stop;
 
 	pm_settings();
 	double elapsed_time();

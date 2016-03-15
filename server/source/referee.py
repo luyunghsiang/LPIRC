@@ -148,9 +148,12 @@ recycle_db = 0
 
 enable_powermeter = 0
 powermeter_client = os.path.join(this_file_path, '../powermeter/wt310_client.py')
-powermeter_ipaddress = '192.168.1.3'
+powermeter_ipaddress = '192.168.1.4'
 powermeter_update_interval = 1 # seconds
 powermeter_mode = 'RMS' # DC | RMS
+
+results_exec = os.path.join(this_file_path, '../results/results.py')
+results_update_interval = 5 # seconds
 
 lpirc_powercsv_dir = os.path.join(this_file_path, '../csv/powermeter/')
 lpirc_resultcsv_dir = os.path.join(this_file_path, '../csv/submissions/')
@@ -214,6 +217,12 @@ pmc_cmd_host_port = '--host_port'
 
 powermeter_status_stop = 'powermeter_stopped'
 powermeter_status_start = 'powermeter_started'
+
+#++++++++++++++++++++++++++++++++ Result Macros ++++++++++++++++++++++++++++++++++
+results_cmd_update_interval = '--interval'
+results_cmd_timeout = '--timeout'
+results_cmd_csv = '--pmcsv'
+results_cmd_map = '--mapcsv'
 
 #++++++++++++++++++++++++++++++++ Help URL - Response ++++++++++++++++++++++++++++++++++
 server_help_message = ("""
@@ -499,7 +508,9 @@ def login_check():
         if ((enable_powermeter == 1) and (powermeter_start(rx_username) is not None)):
             delete_lpirc_session(rx_username)
             return Response(response=resp_powermeter_fail, status=500)
-
+        if (results_start(rx_username) is not None):
+            delete_lpirc_session(rx_username)
+            return Response(response=resp_powermeter_fail, status=500)
         return Response(response=token, status=200)
     except:
 	return Response(response=resp_login_fail, status=500) # Internal
@@ -967,8 +978,31 @@ def powermeter_hard_reset():
 
     return None
 
+#++++++++++++++++++++++++++++++++ Result Functions +++++++++++++++++++++++++++++++++++
+# Results client command line argument (Default)
+def get_results_default_arg():
+    default_command_line = "python\t" + results_exec + "\t" + \
+                           results_cmd_timeout + "\t" + str(timeout) + "\t" + \
+                           results_cmd_update_interval + "\t" + str(results_update_interval)
 
-    
+    return default_command_line
+
+# Start results program
+def results_start (t_player):
+    if t_player == powermeter_user:
+        return None
+
+    cmd_res = get_results_default_arg().split ()
+    tmp_cmd = "start cmd.exe /k".split()
+    exec_cmd = tmp_cmd + cmd_res
+    print exec_cmd
+    try:
+        p1 = subprocess.Popen(exec_cmd, shell=True)
+    except Exception as e:
+        return "Error"
+
+    print "Success!!"
+    return None
 
 # System Popen call
 def system_popen_execute(a_args, a_wait_for_it=None):

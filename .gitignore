@@ -62,3 +62,5 @@ server/shuffle/tmp
 
 # DLL's
 *.dll
+*.csv
+*original*

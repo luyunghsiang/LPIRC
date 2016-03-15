@@ -33,6 +33,7 @@ public:
 	double elapsed_time();
 	int push_value(vector<double> const& v_t, e_wt_functions item);
 	int write_csv(string filename);
+	int write_csv_cont(string filename);
 };
 
 
