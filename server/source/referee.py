@@ -157,6 +157,8 @@ results_update_interval = 5 # seconds
 
 lpirc_powercsv_dir = os.path.join(this_file_path, '../csv/powermeter/')
 lpirc_resultcsv_dir = os.path.join(this_file_path, '../csv/submissions/')
+
+zip_num = 100
 #++++++++++++++++++++++++++++++++ URLs +++++++++++++++++++++++++++++++++++++++++++++++
 url_root = '/'
 url_help = '/help'
@@ -164,6 +166,7 @@ url_login = '/login'
 url_get_token = '/get_token'
 url_verify_token = '/verify'
 url_get_image = '/image'
+url_get_images = '/zipimages'
 url_post_result = '/result'
 url_no_of_images = '/no_of_images'
 url_logout = '/logout'
@@ -247,6 +250,9 @@ Valid URLs:
 
             (post)      (%s=[token]&%s=[image_index])  host%s (Image index starts with 1: 1,2,3,...)
                                                              Example: curl --data "%s=daks....&%s=3" 127.0.0.1:5000%s
+                                                             
+            (post)      (%s=[token]&%s=[image_index])  host%s (Image indexes start with 1 in increments of 100: 1,101,201,...)
+                                                             Example: curl --data "%s=daks....&%s=201" 127.0.0.1:5000%s
 
             (post)      (%s=[token]&%s=[image_index]&..
                          %s=[id]&%s=[conf]&..
@@ -281,7 +287,9 @@ Valid URLs:
      ff_token, url_no_of_images, 
      ff_token, url_no_of_images, 
      ff_token, ff_image_index, url_get_image, 
-     ff_token, ff_image_index, url_get_image, 
+     ff_token, ff_image_index, url_get_image,
+     ff_token, ff_image_index, url_get_images,
+     ff_token, ff_image_index, url_get_images,
      ff_token, ff_image_index, 
      ff_class_id, ff_confidence, 
      ff_bb_xmin, ff_bb_xmax, 
@@ -594,6 +602,51 @@ def send_image():
         # # Flask send file expects split directory arguments
         # split_path_image = os.path.split(list_of_images[image_index])
         # return send_from_directory(split_path_image[0], split_path_image[1], as_attachment=True)        
+
+
+@app.route(url_get_images,methods=['post','get'])
+def send_images():
+    token = request.form[ff_token]
+    if verify_user_token(token) is None:
+        return Response(response=resp_invalid_token, status=401)
+    else:
+        list_of_images = glob.glob(test_images_dir_wildcard)
+        # Token Verified, Send back images
+        image_index_str = request.form[ff_image_index]
+        match = re.search("[^0-9]", image_index_str)
+        if match:
+            return Response(response=resp_invalid_image_index, status=406)  # Not Acceptable
+        image_index = int(image_index_str)
+        if (image_index <= 0) or (image_index > len(list_of_images)):
+            return Response(response=resp_image_index_out_of_range, status=406) # Not Acceptable
+        if ((image_index - 1) % 100) != 0:
+            return Response(response=resp_image_index_out_of_range, status=406) # Not Acceptable
+
+        # For custom shuffling
+        myindex = image_index # For lpirc shuffle
+        my_zipfile = str(myindex)+".zip"
+        my_full_zipname = os.path.join(os.path.dirname(test_images_dir_wildcard), my_zipfile)
+        if not os.path.isfile(my_full_zipname):
+            return Response(response=resp_image_not_found, status=500) # Not Acceptable
+
+        # Update imageset database
+        t_user = get_username(token)
+        sess = Session.query.filter_by(username=t_user).first()
+        for i in range (myindex, myindex + zip_num):
+            if i > len (list_of_images):
+                break
+            my_full_imagename = os.path.join(os.path.dirname(test_images_dir_wildcard), str(i)+".jpg")
+            t_iminfo = Imageset(image_id=str(i), \
+                                image_fullname=my_full_imagename, \
+                                timestamp=datetime.utcnow(), \
+                                author=sess)
+            db.session.add(t_iminfo)
+
+        db.session.commit()
+
+        # Flask send file expects split directory arguments
+        split_path_zip = os.path.split(my_full_zipname)
+        return send_from_directory(split_path_zip[0], split_path_zip[1], as_attachment=True)
 
 
 #++++++++++++++++++++++++++++++++ Total number of images - Response ++++++++++++++++++++++++++++++++

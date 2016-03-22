@@ -6,10 +6,13 @@ import shutil
 import re
 import filecmp
 
+import zipfile
+import zlib
+
 action_map = 'map'
 action_demap = 'demap'
 
-
+zip_num = 100
 
 
 def shuffler(t_indexp1_list, t_N, t_seed, t_wlen, t_action=None):
@@ -136,6 +139,24 @@ if __name__ == "__main__":
 
         print map_dir+" Verified"
 
+    # Generating zipfiles
+    cmp = zipfile.ZIP_DEFLATED
+    for k_mapfile in range(0, N_mapfiles+1):
+        map_dir_local = "map"+str(k_mapfile)
+        img_find = map_dir_local + '/*.*'
+        map_dir = os.path.join(this_file_path, map_dir_local)
+        img_ls = glob.glob(img_find)
+        img_num = len (img_ls)
+        os.chdir (map_dir_local)
+        for n_f in range (1, img_num+1, zip_num):
+            img_n = range(n_f, (n_f + zip_num))
+            img_zl = [str(i) + '.jpg' for i in img_n if i <= img_num]
+            zf_name = str(n_f) + '.zip'
+            zf = zipfile.ZipFile(zf_name, mode='w')
+            for img_e in img_zl:
+                zf.write(img_e, compress_type=cmp)
 
+            zf.close()
+        os.chdir ('..')
         
     sys.exit()
