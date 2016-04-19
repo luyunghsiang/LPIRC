@@ -25,7 +25,7 @@ Options:
          --interval
                 Interval (in seconds) at which we need to get readings and
                 calculate results. (Default value is 5)
-                
+        
          -t, --timeout
                 Results session timeout in seconds.
                 (Default value is 300)
@@ -35,6 +35,9 @@ Options:
 
          --mapcsv
                 Path to the image map files.
+
+         --rcsv
+                Path to the results csv file.
 
          -h, --help
                 Displays all the available option
@@ -49,6 +52,7 @@ import csv                                                                # To p
 this_file_path = os.path.dirname(os.path.abspath(__file__))
 pm_csv = os.path.join(this_file_path, '../powermeter/WT310.csv')
 map_csv = os.path.join(this_file_path, '../shuffle/map0.txt')
+r_csv = os.path.join(this_file_path, '../csv/tmp/lpirc.csv')
 r_interval = 5
 r_timeout = 300
 
@@ -108,7 +112,7 @@ def parse_cmd_line():
     
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hw:", ["help", "pmcsv=", "mapcsv=",\
-                                                         "interval=", "timeout="])
+                                                         "interval=", "timeout=", "rcsv="])
     except getopt.GetoptError as err:
         # print help information and exit:
         print str(err) 
@@ -119,13 +123,15 @@ def parse_cmd_line():
             usage()
             sys.exit()
         elif switch == "--pmcsv":
-            pm_csv = os.path.join(this_file_path, val)
+            pm_csv = os.path.join(this_file_path + "/../powermeter/", val)
         elif switch == "--mapcsv":
-            map_csv = os.path.join(this_file_path, val)
+            map_csv = os.path.join(this_file_path + "/../shuffle/", val)
         elif switch == "--interval":
             r_interval = int(val)
         elif switch in ("-t", "--timeout"):
             r_timeout = int(val)
+        elif switch == "--rcsv":
+            r_csv = os.path.join(this_file_path + "/../csv/tmp/", val)
         else:
             assert False, "unhandled option"
 
@@ -139,6 +145,7 @@ def parse_cmd_line():
 if __name__ == "__main__":
     # Parse Command-line
     parse_cmd_line()
+    #time.sleep (r_interval)
     compute_results()
 else:
     # Parse XML Config file

@@ -211,7 +211,6 @@ def get_image(token, image_number):
         print "The image number is not Acceptable\n" 
         return 0
 
-
 #++++++++++++++++++++++++++++ get_images: Can be used by the participant directly ++++++++++++++++++++++++++++++++++
 # 
 # Functionality : 
@@ -277,6 +276,65 @@ def get_images(token, image_number):
         print "The image number is not Acceptable\n" 
         return 0
 
+
+#++++++++++++++++++++++++++++ get_camera_image: Can be used by the participant directly ++++++++++++++++++++++++++++++++++
+# 
+# Functionality : 
+# Sends request to the server for a zip file with 100 images with its token number and the starting image number.
+# 'status' is 1 if the image transfer succeeded. If the transfer failed, 'status' will be set to 0. 
+# Transfer can fail because of two reasons:-
+# 1. The image_number requested is out of the valid range [1,total_image_number] (inclusive)
+# 2. The image_number requested is not of the form 1, 101, 201, etc.
+# 3. The token is not valid.
+#
+# Usage: status = get_camera_image(token, image_number) 
+# Total number of images can be queried from server using get_no_of_images(token).
+# If image number is outside the permitted range, penalty will be assigned. 
+#
+# Inputs: 
+#         1. token : Obtained from Log in ( get_token() )
+#         2. image_number : Index of image client needs.
+#
+# Output:
+#     1. status  
+# 
+#
+#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+def get_camera_image(token, image_number):
+    #global image_directory
+    #global temp_directory
+    buffer = StringIO ()
+    c = pycurl.Curl()
+    c.setopt(c.URL, host_ipaddress+':'+host_port+'/image_camera')#/?image='+str(image_number))
+    post_data = {'token':token, 'image_name':str(image_number)}
+    postfields = urlencode(post_data)
+    c.setopt(c.POSTFIELDS,postfields)
+    # try:
+            # os.stat(temp_directory)
+    # except:
+            # os.mkdir(temp_directory)
+    # try:
+            # os.stat(image_directory)
+    # except:
+            # os.mkdir(image_directory)
+
+    c.setopt(c.WRITEFUNCTION, buffer.write)
+    c.perform()
+    status = c.getinfo(pycurl.HTTP_CODE)
+    c.close()
+    if status == 200:
+        # Server replied OK so, copy the image from temp_directory to image_directory
+        print buffer.getvalue ()
+        return 1
+    elif status == 401:
+        # Server replied 401, Unauthorized Access, remove the temporary file
+        print "Invalid Token\n"
+        return 0
+    else:
+        # Server replied 406, Not Acceptable, remove the temporary file
+        print "The image number is not Acceptable\n" 
+        return 0
 
 #++++++++++++++++++++++++++++ post_result: Can be used by the participant directly ++++++++++++++++++++++++++++++++++
 # 
@@ -531,7 +589,8 @@ image_directory = '../images'
 temp_directory = '../temp'
 
 #+++++++++++++++++++++++++++ Start of the script +++++++++++++++++++++++++++++++++++++++++++++++
-imgs = True     # Set to False if you want to use get_image
+imgs = False     # Set to False if you want to use get_image
+camera_imgs = True # Set to False if not using camera.
 parse_cmd_line()
 [token, status] = get_token(username,password)   # Login to server and obtain token
 if status==0:
@@ -544,34 +603,48 @@ if status==0:
     print "Token, Incorrect or Expired. Bye!"
     sys.exit()
 # This is for illustration purpose
-if imgs:
-    for w in range (1, int(no_of_images)+1, 100):
-        if get_images (token, w) == 0:
+if camera_imgs:
+    for w in range (1, int(no_of_images)+1, 1):
+        if get_camera_image (token, w) == 0:
             print "Get Images Failed, Exiting, Bye!"
             sys.exit ()
         else:
-            print "Images Stored in Client Directory "+image_directory+"/"+str(w)+".zip"
-            time.sleep(5)
+            time.sleep(1)
         line = get_lines(1)
         if post_result(token,line)==0:        # If post_result failed, exit.
             print "Posting Result Failed, Exiting, Bye!"
             sys.exit()
 
         print
-
 else:
-    for w in range (1,int(no_of_images)+1,1):
-        if get_image(token,w)==0:             # If get_image failed, exit.
-            print "Get Image Failed, Exiting, Bye!"
-            sys.exit()
-        else:
-            print "Image Stored in client directory "+image_directory+"/"+str(w)+".jpg"
-            time.sleep(5)
-        line = get_lines(1)
-        if post_result(token,line)==0:        # If post_result failed, exit.
-            print "Posting Result Failed, Exiting, Bye!"
-            sys.exit()
+    if imgs:
+        for w in range (1, int(no_of_images)+1, 100):
+            if get_images (token, w) == 0:
+                print "Get Images Failed, Exiting, Bye!"
+                sys.exit ()
+            else:
+                print "Images Stored in Client Directory "+image_directory+"/"+str(w)+".zip"
+                time.sleep(5)
+            line = get_lines(1)
+            if post_result(token,line)==0:        # If post_result failed, exit.
+                print "Posting Result Failed, Exiting, Bye!"
+                sys.exit()
 
-        print
+            print
+
+    else:
+        for w in range (1,int(no_of_images)+1,1):
+            if get_image(token,w)==0:             # If get_image failed, exit.
+                print "Get Image Failed, Exiting, Bye!"
+                sys.exit()
+            else:
+                print "Image Stored in client directory "+image_directory+"/"+str(w)+".jpg"
+                time.sleep(5)
+            line = get_lines(1)
+            if post_result(token,line)==0:        # If post_result failed, exit.
+                print "Posting Result Failed, Exiting, Bye!"
+                sys.exit()
+
+            print
 
 post_logout (token)

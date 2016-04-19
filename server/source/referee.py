@@ -2,7 +2,7 @@
 usage_text = """
 LPIRC Referee Server 
 ====================
-@2015 - HELPS, Purdue University
+@2016 - HELPS, Purdue University
 
 Rules:
 1. If a single image has multiple bounding boxes, the client can send the bounding boxes in the same POST message.
@@ -107,6 +107,13 @@ Options:
          -h, --help
                 Displays all the available option
 
+         --enable_display
+                Enable the route to display images.
+
+         --display_img_path
+                Test images to display on screen (Relative to root directory)
+                Default: ../images/display/
+
 
 Following URLs are recognized, served and issued:
 ------------------------------------------------
@@ -130,6 +137,7 @@ import subprocess                                                         # Non-
 import time                                                               # For sleep
 import string, random
 import csv                                                                # Export database entries for scoring
+import socket                                                             # Comunication with camera program
 
 
 #++++++++++++++++++++++++++++++++ Global Variables +++++++++++++++++++++++++++++++++++
@@ -157,8 +165,15 @@ results_update_interval = 5 # seconds
 
 lpirc_powercsv_dir = os.path.join(this_file_path, '../csv/powermeter/')
 lpirc_resultcsv_dir = os.path.join(this_file_path, '../csv/submissions/')
+lpirc_tmpresultcsv_dir = os.path.join(this_file_path, '../csv/tmp/')
+
+display_port = 50012
+display_exec = os.path.join (this_file_path, '../display/disp_img.py')
+display_img_path = os.path.join (this_file_path, '../images/display/')
 
 zip_num = 100
+enable_display = 0
+display_process = None
 #++++++++++++++++++++++++++++++++ URLs +++++++++++++++++++++++++++++++++++++++++++++++
 url_root = '/'
 url_help = '/help'
@@ -167,6 +182,7 @@ url_get_token = '/get_token'
 url_verify_token = '/verify'
 url_get_image = '/image'
 url_get_images = '/zipimages'
+url_get_camera_images = '/image_camera'
 url_post_result = '/result'
 url_no_of_images = '/no_of_images'
 url_logout = '/logout'
@@ -217,6 +233,7 @@ pmc_cmd_start = '--pm_start'
 pmc_cmd_stop = '--pm_stop'
 pmc_cmd_host_ip = '--host_ip'
 pmc_cmd_host_port = '--host_port'
+pmc_cmd_csv = '--pmcsv'
 
 powermeter_status_stop = 'powermeter_stopped'
 powermeter_status_start = 'powermeter_started'
@@ -224,8 +241,12 @@ powermeter_status_start = 'powermeter_started'
 #++++++++++++++++++++++++++++++++ Result Macros ++++++++++++++++++++++++++++++++++
 results_cmd_update_interval = '--interval'
 results_cmd_timeout = '--timeout'
-results_cmd_csv = '--pmcsv'
-results_cmd_map = '--mapcsv'
+results_cmd_pmcsv = '--pmcsv'
+results_cmd_mapcsv = '--mapcsv'
+results_cmd_rcsv = '--rcsv'
+
+#++++++++++++++++++++++++++++++++ Display Macros ++++++++++++++++++++++++++++++++++
+display_cmd_img_path = '--images'
 
 #++++++++++++++++++++++++++++++++ Help URL - Response ++++++++++++++++++++++++++++++++++
 server_help_message = ("""
@@ -253,6 +274,9 @@ Valid URLs:
                                                              
             (post)      (%s=[token]&%s=[image_index])  host%s (Image indexes start with 1 in increments of 100: 1,101,201,...)
                                                              Example: curl --data "%s=daks....&%s=201" 127.0.0.1:5000%s
+
+            (post)      (%s=[token]&%s=[image_index])  host%s (Image index starts with 1: 1,2,3,...)
+                                                             Example: curl --data "%s=daks....&%s=2" 127.0.0.1:5000%s
 
             (post)      (%s=[token]&%s=[image_index]&..
                          %s=[id]&%s=[conf]&..
@@ -290,6 +314,8 @@ Valid URLs:
      ff_token, ff_image_index, url_get_image,
      ff_token, ff_image_index, url_get_images,
      ff_token, ff_image_index, url_get_images,
+     ff_token, ff_image_index, url_get_camera_images,
+     ff_token, ff_image_index, url_get_camera_images,
      ff_token, ff_image_index, 
      ff_class_id, ff_confidence, 
      ff_bb_xmin, ff_bb_xmax, 
@@ -328,6 +354,8 @@ resp_power_readings_stored = 'Readings stored in the server database\n'
 resp_power_readings_length_mismatch = 'Power readings field length mismatch\n'
 resp_csvsave_success = 'Submissions stored in csv file\n'
 resp_csvsave_fail = 'Error storing submissions in csv file\n'
+resp_display_fail = 'Display failed to start\n'
+resp_display_success = 'Display success\n'
 
 #++++++++++++++++++++++++++++++++ Start Flask and Database ++++++++++++++++++++++++++
 app = Flask(__name__)
@@ -516,9 +544,14 @@ def login_check():
         if ((enable_powermeter == 1) and (powermeter_start(rx_username) is not None)):
             delete_lpirc_session(rx_username)
             return Response(response=resp_powermeter_fail, status=500)
-        if (results_start(rx_username) is not None):
+        if ((enable_powermeter == 1) and (results_start(rx_username) is not None)):
             delete_lpirc_session(rx_username)
             return Response(response=resp_powermeter_fail, status=500)
+        tmp_f = open (os.path.join (lpirc_tmpresultcsv_dir, rx_username + '.csv'), 'w')
+        tmp_f.close ()
+        if ((enable_display == 1) and (display_start (rx_username) is not None)):
+            delete_lpirc_session(rx_username)
+            return Response(response=resp_display_fail, status=500)
         return Response(response=token, status=200)
     except:
 	return Response(response=resp_login_fail, status=500) # Internal
@@ -538,6 +571,7 @@ def logout_session():
     else:
         credential = get_credential(token)
         powermeter_stop()
+        display_stop ()
         set_session_status(credential[ff_username], session_status_inactive)
         return Response(response=resp_logout, status=200)
 
@@ -603,7 +637,7 @@ def send_image():
         # split_path_image = os.path.split(list_of_images[image_index])
         # return send_from_directory(split_path_image[0], split_path_image[1], as_attachment=True)        
 
-
+# Send zipfile with multiple images.
 @app.route(url_get_images,methods=['post','get'])
 def send_images():
     token = request.form[ff_token]
@@ -648,6 +682,52 @@ def send_images():
         split_path_zip = os.path.split(my_full_zipname)
         return send_from_directory(split_path_zip[0], split_path_zip[1], as_attachment=True)
 
+# Send Images
+@app.route(url_get_camera_images,methods=['post','get'])
+def send_image_camera():
+    if enable_display == 1:
+        token = request.form[ff_token]
+        if verify_user_token(token) is None:
+            return Response(response=resp_invalid_token, status=401)
+        else:
+            list_of_images = glob.glob(os.path.join (display_img_path, '*.jpg'))
+            # Token Verified, Send back images
+            image_index_str = request.form[ff_image_index]
+            match = re.search("[^0-9]", image_index_str)
+            if match:
+                return Response(response=resp_invalid_image_index, status=406)  # Not Acceptable
+            image_index = int(image_index_str)
+            if (image_index <= 0) or (image_index > len(list_of_images)):
+                return Response(response=resp_image_index_out_of_range, status=406) # Not Acceptable
+
+            # For custom shuffling
+            myindex = image_index # For lpirc shuffle
+            my_imagefile = str(myindex)+".jpg"
+            my_full_imagename = os.path.join(os.path.dirname(display_img_path), my_imagefile)
+            if not os.path.isfile(my_full_imagename):
+                return Response(response=resp_image_not_found, status=500) # Not Acceptable
+
+            # Send image number to display program.
+            # TODO: Catch exceptions
+            s = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
+            s.connect (('localhost', display_port))
+            s.sendall (str (image_index))
+            s.close ()
+
+            # Update imageset database
+            t_user = get_username(token)
+            sess = Session.query.filter_by(username=t_user).first()
+            t_iminfo = Imageset(image_id=str(myindex), \
+                                image_fullname=my_full_imagename, \
+                                timestamp=datetime.utcnow(), \
+                                author=sess)
+
+            db.session.add(t_iminfo)
+            db.session.commit()
+
+            return Response(response=resp_display_success, status=200)
+    else:
+        return Response (response=resp_display_fail, status=500)
 
 #++++++++++++++++++++++++++++++++ Total number of images - Response ++++++++++++++++++++++++++++++++
 # Send number of images
@@ -690,6 +770,7 @@ def store_result():
         sess = Session.query.filter_by(username=t_user).first()
         t_count = len(t_image_name)
         try:
+            tr_f = open (os.path.join (lpirc_tmpresultcsv_dir, t_user + '.csv'), 'ab')
             for k in range(0,t_count):
                 t_res = Result(image=t_image_name[k], class_id=t_class_id[k], \
                                confidence=t_confidence[k], \
@@ -697,6 +778,15 @@ def store_result():
                                ymin=t_ymin[k], ymax=t_ymax[k], \
                                timestamp=datetime.utcnow(), \
                                author=sess)
+                write_str = str (t_image_name[k]) + ','
+                write_str += str (t_class_id[k]) + ','
+                write_str += str (t_confidence[k]) + ','
+                write_str += str (t_xmin[k]) + ','
+                write_str += str (t_ymin[k]) + ','
+                write_str += str (t_xmax[k]) + ','
+                write_str += str (t_ymax[k]) + '\n'
+                tr_f.write (write_str)
+
                 db.session.add(t_res)
 
             db.session.commit()
@@ -949,16 +1039,19 @@ def powermeter_ping():
 
 # Powermeter stop
 def powermeter_stop():
-    pm_command_line = get_pmc_default_arg()
-    pm_command_line += "\t" + pmc_cmd_stop
+    if enable_powermeter == 1:
+        pm_command_line = get_pmc_default_arg()
+        pm_command_line += "\t" + pmc_cmd_stop
 
-    # Perform system call
-    t_out = system_popen_execute(pm_command_line, "wait for it")
-    if t_out is not None:
-        print "Powermeter stop failed\n"
-        return "Error"
+        # Perform system call
+        t_out = system_popen_execute(pm_command_line, "wait for it")
+        if t_out is not None:
+            print "Powermeter stop failed\n"
+            return "Error"
 
-    return None
+        return None
+    else:
+        return None
 
 # Powermeter start
 def powermeter_start(t_player):
@@ -985,6 +1078,7 @@ def powermeter_start(t_player):
     pm_command_line += "\t" + pmc_cmd_user + "\t" + powermeter_user
     pm_command_line += "\t" + pmc_cmd_password + "\t" + powermeter_password
     pm_command_line += "\t" + pmc_cmd_player + "\t" + t_player
+    pm_command_line += "\t" + pmc_cmd_csv + "\t" + ('WT310_' + t_player + '.csv')
     pm_command_line += "\t" + pmc_cmd_start
     # Perform system call
     t_out = system_popen_execute(pm_command_line)
@@ -1034,7 +1128,7 @@ def powermeter_hard_reset():
 #++++++++++++++++++++++++++++++++ Result Functions +++++++++++++++++++++++++++++++++++
 # Results client command line argument (Default)
 def get_results_default_arg():
-    default_command_line = "python\t" + results_exec + "\t" + \
+    default_command_line = "C:\\Python27\\python.exe\t" + results_exec + "\t" + \
                            results_cmd_timeout + "\t" + str(timeout) + "\t" + \
                            results_cmd_update_interval + "\t" + str(results_update_interval)
 
@@ -1045,7 +1139,10 @@ def results_start (t_player):
     if t_player == powermeter_user:
         return None
 
-    cmd_res = get_results_default_arg().split ()
+    cmd_res = get_results_default_arg()
+    cmd_res += "\t" + results_cmd_pmcsv + "\t" + ('WT310_' + t_player + '.csv')
+    cmd_res += "\t" + results_cmd_rcsv + "\t" + (t_player + '.csv')
+    cmd_res = cmd_res.split()
     tmp_cmd = "start cmd.exe /k".split()
     exec_cmd = tmp_cmd + cmd_res
     print exec_cmd
@@ -1054,7 +1151,39 @@ def results_start (t_player):
     except Exception as e:
         return "Error"
 
-    print "Success!!"
+    return None
+
+#++++++++++++++++++++++++++++++++ Display Functions +++++++++++++++++++++++++++++++++++
+# Display program command line argument (Default)
+def get_display_default_arg():
+    default_command_line = "C:\\Python27\\python.exe\t" + display_exec + "\t" + \
+                           display_cmd_img_path + "\t" + display_img_path
+
+    return default_command_line
+
+# Start display program
+def display_start (t_player):
+    global display_process
+    if t_player == powermeter_user:
+        return None
+
+    cmd_res = get_display_default_arg()
+    exec_cmd = cmd_res.split ()
+    print exec_cmd
+    try:
+        display_process = subprocess.Popen(exec_cmd, stdin=None, stdout=subprocess.PIPE,\
+                              stderr=subprocess.PIPE, shell=False)
+    except Exception as e:
+        return "Error"
+
+    return None
+
+# Terminate display process.
+def display_stop ():
+    global display_process
+    if enable_display == 1 and (display_process is not None):
+        display_process.terminate ()
+        display_process = None
     return None
 
 # System Popen call
@@ -1219,13 +1348,17 @@ def parse_cmd_line():
     global lpirc_db
     global enable_powermeter
     global recycle_db
+    global enable_display
+    global display_img_path
 
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "port=", "images=", "result=", \
                                                            "debug", "secret=", \
                                                            "enable_powermeter", \
                                                            "recycle", \
-                                                           "timeout="])
+                                                           "timeout=",\
+                                                           "enable_display",\
+                                                           "display_img_path="])
     except getopt.GetoptError as err:
         # print help information and exit:
         print str(err) 
@@ -1253,6 +1386,10 @@ def parse_cmd_line():
             enable_powermeter = 1
         elif switch == "--recycle":
             recycle_db = 1
+        elif switch == "--enable_display":
+            enable_display = 1
+        elif switch == "--display_img_path":
+            display_img_path = os.path.join (this_file_path, val)
         else:
             assert False, "unhandled option"
 
@@ -1263,7 +1400,11 @@ def parse_cmd_line():
     if enable_powermeter == 1:
         print "Powermeter Enabled\n"
     else:
-        print "Powermeter Disabled\n"        
+        print "Powermeter Disabled\n"
+    if enable_display == 1:
+        print "Display Enabled\n"
+    else:
+        print "Display Disabled\n"
 
     if recycle_db == 1:
         print "Database overwritten for subsequent logins\n"
