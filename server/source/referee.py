@@ -167,6 +167,7 @@ lpirc_powercsv_dir = os.path.join(this_file_path, '../csv/powermeter/')
 lpirc_resultcsv_dir = os.path.join(this_file_path, '../csv/submissions/')
 lpirc_tmpresultcsv_dir = os.path.join(this_file_path, '../csv/tmp/')
 
+# Do not use display_port as a port for the server.
 display_port = 50012
 display_exec = os.path.join (this_file_path, '../display/disp_img.py')
 display_img_path = os.path.join (this_file_path, '../images/display/')
@@ -595,7 +596,7 @@ def send_image():
     if verify_user_token(token) is None:
         return Response(response=resp_invalid_token, status=401)
     else:
-	list_of_images = glob.glob(test_images_dir_wildcard)
+        list_of_images = glob.glob(test_images_dir_wildcard)
         # Token Verified, Send back images
         image_index_str = request.form[ff_image_index]
         match = re.search("[^0-9]", image_index_str)
@@ -626,16 +627,6 @@ def send_image():
         # Flask send file expects split directory arguments
         split_path_image = os.path.split(my_full_imagename)
         return send_from_directory(split_path_image[0], split_path_image[1], as_attachment=True)        
-        
-
-        # # Assuming image index starts with 1. example: 1,2,3,....
-        # image_index -= 1      # For index in range (0, N-1)
-
-        # # List all images in directory
-        # list_of_images = glob.glob(test_images_dir_wildcard)
-        # # Flask send file expects split directory arguments
-        # split_path_image = os.path.split(list_of_images[image_index])
-        # return send_from_directory(split_path_image[0], split_path_image[1], as_attachment=True)        
 
 # Send zipfile with multiple images.
 @app.route(url_get_images,methods=['post','get'])
@@ -682,7 +673,7 @@ def send_images():
         split_path_zip = os.path.split(my_full_zipname)
         return send_from_directory(split_path_zip[0], split_path_zip[1], as_attachment=True)
 
-# Send Images
+# Send Images to the display
 @app.route(url_get_camera_images,methods=['post','get'])
 def send_image_camera():
     if enable_display == 1:
@@ -950,6 +941,8 @@ def check_session_timeout(a_username, a_timestamp):
     elapsed = datetime.now() - dt
     if elapsed.total_seconds() > sess.mytimeout:
         print "Elapsed Time = {}".format(elapsed.total_seconds())
+        # Stop the display
+        display_stop ()
         return 1
     else:
         return 0

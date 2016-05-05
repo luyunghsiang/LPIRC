@@ -66,7 +66,9 @@ class SocketListener (threading.Thread):
             conn, addr = self.s.accept ()
             gtk.threads_enter ()
             data = conn.recv (1024)
-            print data
+            if data == "END":
+                main_quit ()
+                break
 
             # Changing the image object to the image needed.
             file_name = os.path.join (imgs_path, data + '.jpg')

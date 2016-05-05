@@ -609,7 +609,7 @@ if camera_imgs:
             print "Get Images Failed, Exiting, Bye!"
             sys.exit ()
         else:
-            time.sleep(1)
+            time.sleep(5)
         line = get_lines(1)
         if post_result(token,line)==0:        # If post_result failed, exit.
             print "Posting Result Failed, Exiting, Bye!"
