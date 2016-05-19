@@ -101,6 +101,9 @@ Options:
          --enable_powermeter
                 Enables powermeter
 
+         --pmip
+                Powermeter's IP address
+
          --recycle
                 Over write database for subsequent logins
 
@@ -108,7 +111,7 @@ Options:
                 Displays all the available option
 
          --enable_display
-                Enable the route to display images.
+                Enable the path to display images.
 
          --display_img_path
                 Test images to display on screen (Relative to root directory)
@@ -156,7 +159,7 @@ recycle_db = 0
 
 enable_powermeter = 0
 powermeter_client = os.path.join(this_file_path, '../powermeter/wt310_client.py')
-powermeter_ipaddress = '192.168.1.4'
+powermeter_ipaddress = '192.168.1.3'
 powermeter_update_interval = 1 # seconds
 powermeter_mode = 'RMS' # DC | RMS
 
@@ -175,6 +178,7 @@ display_img_path = os.path.join (this_file_path, '../images/display/')
 zip_num = 100
 enable_display = 0
 display_process = None
+results_process = None
 #++++++++++++++++++++++++++++++++ URLs +++++++++++++++++++++++++++++++++++++++++++++++
 url_root = '/'
 url_help = '/help'
@@ -573,6 +577,7 @@ def logout_session():
         credential = get_credential(token)
         powermeter_stop()
         display_stop ()
+        results_stop ()
         set_session_status(credential[ff_username], session_status_inactive)
         return Response(response=resp_logout, status=200)
 
@@ -943,6 +948,7 @@ def check_session_timeout(a_username, a_timestamp):
         print "Elapsed Time = {}".format(elapsed.total_seconds())
         # Stop the display
         display_stop ()
+        results_stop ()
         return 1
     else:
         return 0
@@ -1129,6 +1135,7 @@ def get_results_default_arg():
 
 # Start results program
 def results_start (t_player):
+    global results_process
     if t_player == powermeter_user:
         return None
 
@@ -1140,10 +1147,18 @@ def results_start (t_player):
     exec_cmd = tmp_cmd + cmd_res
     print exec_cmd
     try:
-        p1 = subprocess.Popen(exec_cmd, shell=True)
+        results_process = subprocess.Popen(exec_cmd, shell=True)
     except Exception as e:
         return "Error"
 
+    return None
+
+# Terminate results process.
+def results_stop ():
+    global results_process
+    if enable_powermeter == 1 and (results_process is not None):
+        results_process.terminate ()
+        results_process = None
     return None
 
 #++++++++++++++++++++++++++++++++ Display Functions +++++++++++++++++++++++++++++++++++
@@ -1154,7 +1169,7 @@ def get_display_default_arg():
 
     return default_command_line
 
-# Start display program
+# Start display program for Track 3
 def display_start (t_player):
     global display_process
     if t_player == powermeter_user:
@@ -1343,6 +1358,7 @@ def parse_cmd_line():
     global recycle_db
     global enable_display
     global display_img_path
+    global powermeter_ipaddress
 
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hw:p:", ["help", "ip=", "port=", "images=", "result=", \
@@ -1351,7 +1367,8 @@ def parse_cmd_line():
                                                            "recycle", \
                                                            "timeout=",\
                                                            "enable_display",\
-                                                           "display_img_path="])
+                                                           "display_img_path=",\
+                                                           "pmip="])
     except getopt.GetoptError as err:
         # print help information and exit:
         print str(err) 
@@ -1383,6 +1400,8 @@ def parse_cmd_line():
             enable_display = 1
         elif switch == "--display_img_path":
             display_img_path = os.path.join (this_file_path, val)
+        elif switch == "--pmip":
+            powermeter_ipaddress = val
         else:
             assert False, "unhandled option"
 

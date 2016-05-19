@@ -35,6 +35,7 @@ Options:
 
          --mapcsv
                 Path to the image map files.
+                Used when images are shuffled between teams.
 
          --rcsv
                 Path to the results csv file.
@@ -47,6 +48,7 @@ import getopt, sys, re, glob, os                                          # Pars
 from subprocess import Popen, PIPE                                        # Non-blocking program execution
 import time                                                               # For sleep
 import csv                                                                # To process powermeter driver generated csv file
+from pyeval import DetectionEvaluate                                      # Evaluation of results
 
 #++++++++++++++++++++++++++++++++ Global Variables +++++++++++++++++++++++++++++++++++
 this_file_path = os.path.dirname(os.path.abspath(__file__))
@@ -63,15 +65,63 @@ def usage():
 #++++++++++++++++++++++++++++++++ Computing Results +++++++++++++++++++++++++++++++
 # Computes results after every interval by calling the evaluation program
 def compute_results ():
+    # Specify the needed files. We need to replace these files.
+    det_meta_file = os.path.join (this_file_path, "data", "meta_det.mat")
+    det_eval_file = os.path.join (this_file_path, "data", "val.txt")
+    det_gt_file = os.path.join (this_file_path, "data", "det_validation_ground_truth.mat")
+    det_blacklist_file = os.path.join (this_file_path, "data", "det_validation_blacklist.txt")
+    demo_val_det_file = r_csv
+    last_ind = 0
+    prev_last_ind = -1
+    ap = 0
+
+    # Initialize a EvaluateDetection object. Do it one time at the begining.
+    det_eval = DetectionEvaluate(
+        det_meta_file, det_eval_file, det_gt_file, det_blacklist_file)
+
     time_elapsed = 0
     pm_file = open (pm_csv, 'r')
     map_file = open (map_csv, 'r')
+    detections = dict ()
+
     while time_elapsed <= r_timeout:
         start_t = time.clock ()
         time.sleep (r_interval)
-        lines = tail (pm_file, 1)
-        print lines
+        f = open(demo_val_det_file, "r")
+        lines = f.readlines()
+        f.close ()
+        pick_lines = range (last_ind, len (lines))
+        if last_ind < len (lines):
+            for i in pick_lines:
+                line = lines[i]
+                items = line.rstrip("\n").split(",")
+                image_id = int(items[0])
+                class_id = int(items[1])
+                confidence = float(items[2])
+                xmin = float(items[3])
+                ymin = float(items[4])
+                xmax = float(items[5])
+                ymax = float(items[6])
+                if image_id in detections:
+                    detections[image_id].append([class_id, confidence, xmin, ymin, xmax, ymax])
+                else:
+                    detections[image_id] = [[class_id, confidence, xmin, ymin, xmax, ymax]]
+            prev_last_ind = last_ind
+            last_ind = pick_lines[-1] + 1
+
+        if (prev_last_ind != last_ind):
+            ap = det_eval.evaluate(detections)
+
+        pm_lines = tail (pm_file, 1)
+        pm_vals = pm_lines.rstrip("\n").split(",")
+        if float (pm_vals[-2]) > 0:
+            print "SCORE =", ap / float (pm_vals[-2])
+        #print "last_ind =", last_ind, "prev_last_ind =", prev_last_ind, "ap =", ap, "len of dict =", len(detections)
+        #print pm_lines
         time_elapsed += r_interval
+
+    pm_file.close ()
+    map_file.close ()
         
 # Performs similiar to UNIX's tail
 def tail( f, lines=20 ):
@@ -109,6 +159,7 @@ def parse_cmd_line():
     global map_csv
     global r_interval
     global r_timeout
+    global r_csv
     
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hw:", ["help", "pmcsv=", "mapcsv=",\

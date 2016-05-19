@@ -54,11 +54,15 @@ docs/_build/
 target/
 
 # Client images
-client/images/
+client/images*
+client/tmp*
 
 # Shuffled images
 server/shuffle/map*
 server/shuffle/tmp
+
+# Results evaluation data
+server/results/data
 
 # DLL's
 *.dll

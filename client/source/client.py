@@ -590,7 +590,7 @@ temp_directory = '../temp'
 
 #+++++++++++++++++++++++++++ Start of the script +++++++++++++++++++++++++++++++++++++++++++++++
 imgs = False     # Set to False if you want to use get_image
-camera_imgs = True # Set to False if not using camera.
+camera_imgs = False # Set to False if not using camera.
 parse_cmd_line()
 [token, status] = get_token(username,password)   # Login to server and obtain token
 if status==0:
@@ -624,7 +624,7 @@ else:
                 sys.exit ()
             else:
                 print "Images Stored in Client Directory "+image_directory+"/"+str(w)+".zip"
-                time.sleep(5)
+                time.sleep(2)
             line = get_lines(1)
             if post_result(token,line)==0:        # If post_result failed, exit.
                 print "Posting Result Failed, Exiting, Bye!"
@@ -639,7 +639,7 @@ else:
                 sys.exit()
             else:
                 print "Image Stored in client directory "+image_directory+"/"+str(w)+".jpg"
-                time.sleep(5)
+                time.sleep(2)
             line = get_lines(1)
             if post_result(token,line)==0:        # If post_result failed, exit.
                 print "Posting Result Failed, Exiting, Bye!"
