@@ -738,7 +738,7 @@ def send_no_of_images():
     if verify_user_token(token) is None:
         return Response(response='Invalid User', status=401)  # Unauthorized
     else:
-    total_number_images = len(glob.glob(test_images_dir_wildcard))
+        total_number_images = len(glob.glob(test_images_dir_wildcard))
         return Response(response=str(total_number_images), status=200)
 
 
