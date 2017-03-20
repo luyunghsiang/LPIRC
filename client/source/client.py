@@ -304,7 +304,7 @@ def get_images(token, image_number):
 def get_camera_image(token, image_number):
     #global image_directory
     #global temp_directory
-    buffer = StringIO ()
+    buffer = StringIO()
     c = pycurl.Curl()
     c.setopt(c.URL, host_ipaddress+':'+host_port+'/image_camera')#/?image='+str(image_number))
     post_data = {'token':token, 'image_name':str(image_number)}
@@ -325,7 +325,7 @@ def get_camera_image(token, image_number):
     c.close()
     if status == 200:
         # Server replied OK so, copy the image from temp_directory to image_directory
-        print buffer.getvalue ()
+        print buffer.getvalue()
         return 1
     elif status == 401:
         # Server replied 401, Unauthorized Access, remove the temporary file
@@ -604,10 +604,10 @@ if status==0:
     sys.exit()
 # This is for illustration purpose
 if camera_imgs:
-    for w in range (1, int(no_of_images)+1, 1):
-        if get_camera_image (token, w) == 0:
+    for w in range(1, int(no_of_images)+1, 1):
+        if get_camera_image(token, w) == 0:
             print "Get Images Failed, Exiting, Bye!"
-            sys.exit ()
+            sys.exit()
         else:
             time.sleep(5)
         line = get_lines(1)
@@ -618,10 +618,10 @@ if camera_imgs:
         print
 else:
     if imgs:
-        for w in range (1, int(no_of_images)+1, 100):
-            if get_images (token, w) == 0:
+        for w in range(1, int(no_of_images)+1, 100):
+            if get_images(token, w) == 0:
                 print "Get Images Failed, Exiting, Bye!"
-                sys.exit ()
+                sys.exit()
             else:
                 print "Images Stored in Client Directory "+image_directory+"/"+str(w)+".zip"
                 time.sleep(2)
@@ -633,7 +633,7 @@ else:
             print
 
     else:
-        for w in range (1,int(no_of_images)+1,1):
+        for w in range(1,int(no_of_images)+1,1):
             if get_image(token,w)==0:             # If get_image failed, exit.
                 print "Get Image Failed, Exiting, Bye!"
                 sys.exit()

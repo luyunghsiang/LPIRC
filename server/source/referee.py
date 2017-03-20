@@ -172,8 +172,8 @@ lpirc_tmpresultcsv_dir = os.path.join(this_file_path, '../csv/tmp/')
 
 # Do not use display_port as a port for the server.
 display_port = 50012
-display_exec = os.path.join (this_file_path, '../display/disp_img.py')
-display_img_path = os.path.join (this_file_path, '../images/display/')
+display_exec = os.path.join(this_file_path, '../display/disp_img.py')
+display_img_path = os.path.join(this_file_path, '../images/display/')
 
 zip_num = 100
 enable_display = 0
@@ -532,10 +532,10 @@ def server_help():
 @app.route(url_get_token, methods=['post','get'])
 def login_check():
     try:
-    	rx_username = request.form[ff_username]
-    	rx_password = request.form[ff_password]
+        rx_username = request.form[ff_username]
+        rx_password = request.form[ff_password]
     except:
-	return Response(response=resp_missing_username_or_password, status=401) # Unauthorized
+        return Response(response=resp_missing_username_or_password, status=401) # Unauthorized
 
     try:
         # Validate username and password
@@ -552,14 +552,16 @@ def login_check():
         if ((enable_powermeter == 1) and (results_start(rx_username) is not None)):
             delete_lpirc_session(rx_username)
             return Response(response=resp_powermeter_fail, status=500)
-        tmp_f = open (os.path.join (lpirc_tmpresultcsv_dir, rx_username + '.csv'), 'w')
-        tmp_f.close ()
+        if not os.path.isdir(lpirc_tmpresultcsv_dir):
+            os.path.mkdir(lpirc_tmpresultcsv_dir)
+        tmp_f = open(os.path.join(lpirc_tmpresultcsv_dir, rx_username + '.csv'), 'w')
+        tmp_f.close()
         if ((enable_display == 1) and (display_start (rx_username) is not None)):
             delete_lpirc_session(rx_username)
             return Response(response=resp_display_fail, status=500)
         return Response(response=token, status=200)
     except:
-	return Response(response=resp_login_fail, status=500) # Internal
+       return Response(response=resp_login_fail, status=500) # Internal
 
 
 #++++++++++++++++++++++++++++++++ Logout - Response +++++++++++++++++++++++++++++
@@ -567,17 +569,17 @@ def login_check():
 @app.route(url_logout, methods=['post','get'])
 def logout_session():
     try:
-    	token = request.form[ff_token]
+        token = request.form[ff_token]
     except:
-	return Response(response=resp_invalid_token, status=401) # Unauthorize
+        return Response(response=resp_invalid_token, status=401) # Unauthorize
 
     if verify_user_token(token) is None:
         return Response(response=resp_invalid_token, status=401) # Unauthorized
     else:
         credential = get_credential(token)
         powermeter_stop()
-        display_stop ()
-        results_stop ()
+        display_stop()
+        results_stop()
         set_session_status(credential[ff_username], session_status_inactive)
         return Response(response=resp_logout, status=200)
 
@@ -662,8 +664,8 @@ def send_images():
         # Update imageset database
         t_user = get_username(token)
         sess = Session.query.filter_by(username=t_user).first()
-        for i in range (myindex, myindex + zip_num):
-            if i > len (list_of_images):
+        for i in range(myindex, myindex + zip_num):
+            if i > len(list_of_images):
                 break
             my_full_imagename = os.path.join(os.path.dirname(test_images_dir_wildcard), str(i)+".jpg")
             t_iminfo = Imageset(image_id=str(i), \
@@ -686,7 +688,7 @@ def send_image_camera():
         if verify_user_token(token) is None:
             return Response(response=resp_invalid_token, status=401)
         else:
-            list_of_images = glob.glob(os.path.join (display_img_path, '*.jpg'))
+            list_of_images = glob.glob(os.path.join(display_img_path, '*.jpg'))
             # Token Verified, Send back images
             image_index_str = request.form[ff_image_index]
             match = re.search("[^0-9]", image_index_str)
@@ -705,10 +707,10 @@ def send_image_camera():
 
             # Send image number to display program.
             # TODO: Catch exceptions
-            s = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
-            s.connect (('localhost', display_port))
-            s.sendall (str (image_index))
-            s.close ()
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect(('localhost', display_port))
+            s.sendall(str (image_index))
+            s.close()
 
             # Update imageset database
             t_user = get_username(token)
@@ -723,20 +725,20 @@ def send_image_camera():
 
             return Response(response=resp_display_success, status=200)
     else:
-        return Response (response=resp_display_fail, status=500)
+        return Response(response=resp_display_fail, status=500)
 
 #++++++++++++++++++++++++++++++++ Total number of images - Response ++++++++++++++++++++++++++++++++
 # Send number of images
 @app.route(url_no_of_images,methods=['post'])
 def send_no_of_images():
     try:
-    	token = request.form[ff_token]
+        token = request.form[ff_token]
     except:
-	return Response(response=resp_invalid_token, status=401) # Unauthorize
+    return Response(response=resp_invalid_token, status=401) # Unauthorize
     if verify_user_token(token) is None:
         return Response(response='Invalid User', status=401)  # Unauthorized
     else:
-	total_number_images = len(glob.glob(test_images_dir_wildcard))
+    total_number_images = len(glob.glob(test_images_dir_wildcard))
         return Response(response=str(total_number_images), status=200)
 
 
@@ -766,7 +768,7 @@ def store_result():
         sess = Session.query.filter_by(username=t_user).first()
         t_count = len(t_image_name)
         try:
-            tr_f = open (os.path.join (lpirc_tmpresultcsv_dir, t_user + '.csv'), 'ab')
+            tr_f = open(os.path.join(lpirc_tmpresultcsv_dir, t_user + '.csv'), 'ab')
             for k in range(0,t_count):
                 t_res = Result(image=t_image_name[k], class_id=t_class_id[k], \
                                confidence=t_confidence[k], \
@@ -774,14 +776,14 @@ def store_result():
                                ymin=t_ymin[k], ymax=t_ymax[k], \
                                timestamp=datetime.utcnow(), \
                                author=sess)
-                write_str = str (t_image_name[k]) + ','
-                write_str += str (t_class_id[k]) + ','
-                write_str += str (t_confidence[k]) + ','
-                write_str += str (t_xmin[k]) + ','
-                write_str += str (t_ymin[k]) + ','
-                write_str += str (t_xmax[k]) + ','
-                write_str += str (t_ymax[k]) + '\n'
-                tr_f.write (write_str)
+                write_str = str(t_image_name[k]) + ','
+                write_str += str(t_class_id[k]) + ','
+                write_str += str(t_confidence[k]) + ','
+                write_str += str(t_xmin[k]) + ','
+                write_str += str(t_ymin[k]) + ','
+                write_str += str(t_xmax[k]) + ','
+                write_str += str(t_ymax[k]) + '\n'
+                tr_f.write(write_str)
 
                 db.session.add(t_res)
 
@@ -947,8 +949,8 @@ def check_session_timeout(a_username, a_timestamp):
     if elapsed.total_seconds() > sess.mytimeout:
         print "Elapsed Time = {}".format(elapsed.total_seconds())
         # Stop the display
-        display_stop ()
-        results_stop ()
+        display_stop()
+        results_stop()
         return 1
     else:
         return 0
@@ -1156,8 +1158,8 @@ def results_start (t_player):
 # Terminate results process.
 def results_stop ():
     global results_process
-    if enable_powermeter == 1 and (results_process is not None):
-        results_process.terminate ()
+    if enable_powermeter == 1 and(results_process is not None):
+        results_process.terminate()
         results_process = None
     return None
 
@@ -1190,7 +1192,7 @@ def display_start (t_player):
 def display_stop ():
     global display_process
     if enable_display == 1 and (display_process is not None):
-        display_process.terminate ()
+        display_process.terminate()
         display_process = None
     return None
 
