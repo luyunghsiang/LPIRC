@@ -130,6 +130,7 @@ class DetectionEvaluate(object):
     # Extract detection results.
     labels = []
     for image_id, results in detections.iteritems():
+      results = list(results)
       if image_id not in self.stored_detections:
         # If it is new image, store it.
         self.stored_detections[image_id] = deepcopy(results)

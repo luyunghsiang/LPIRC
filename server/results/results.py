@@ -40,6 +40,9 @@ Options:
          --rcsv
                 Path to the results csv file.
 
+         --user
+                User for whom the score is calculated. 
+
          -h, --help
                 Displays all the available option
 """
@@ -57,10 +60,52 @@ map_csv = os.path.join(this_file_path, '../shuffle/map0.txt')
 r_csv = os.path.join(this_file_path, '../csv/tmp/lpirc.csv')
 r_interval = 5
 r_timeout = 300
+r_user = "lpirc"
 
 # Script usage function
 def usage():
     print usage_text
+
+class BoundingBox(object):
+    """docstring for BoundingBox"""
+    def __init__(self, arg):
+        super(BoundingBox, self).__init__()
+        self.arg = arg
+        self.image_id = int(arg[0])
+        self.class_id = int(arg[1])
+        self.confidence = float(arg[2])
+        self.xmin = float(arg[3])
+        self.ymin = float(arg[4])
+        self.xmax = float(arg[5])
+        self.ymax = float(arg[6])
+
+    def __iter__(self):
+        return(iter([self.class_id, self.confidence, self.xmin, self.ymin, self.xmax, self.ymax]))
+
+    def __str__(self):
+        return "{}".format([self.class_id, self.confidence, self.xmin, self.ymin, self.xmax, self.ymax])
+
+class Image(object):
+    """docstring for Image"""
+    def __init__(self, arg):
+        super(Image, self).__init__()
+        self.arg = arg
+        self.image_id = int(arg[0])
+        self.bboxes = [BoundingBox(arg)]
+
+    def __iter__(self):
+        return iter([list(x) for x in self.bboxes])
+
+    def __dict__(self):
+        return {self.image_id:self}
+
+    def __str__(self):
+        return "Image:\nID:{}\nBounding Boxes:{}".format(self.image_id, [str(x) for x in self.bboxes])
+
+    def addBbox(self, arg):
+        newBox = BoundingBox(arg)
+        if newBox not in self.bboxes:
+            self.bboxes.append(newBox)
 
 #++++++++++++++++++++++++++++++++ Computing Results +++++++++++++++++++++++++++++++
 # Computes results after every interval by calling the evaluation program
@@ -80,9 +125,9 @@ def compute_results ():
         det_meta_file, det_eval_file, det_gt_file, det_blacklist_file)
 
     time_elapsed = 0
-    pm_file = open (pm_csv, 'r')
-    map_file = open (map_csv, 'r')
-    detections = dict ()
+    pm_file = open(pm_csv, 'r')
+    map_file = open(map_csv, 'r')
+    detections = dict()
 
     while time_elapsed <= r_timeout:
         start_t = time.clock ()
@@ -91,31 +136,36 @@ def compute_results ():
         lines = f.readlines()
         f.close ()
         pick_lines = range (last_ind, len (lines))
+        print(len(pick_lines))
+        # return
         if last_ind < len (lines):
-            for i in pick_lines:
-                line = lines[i]
+            for line in lines:
+                # line = lines[i]
                 items = line.rstrip("\n").split(",")
+                # img = Image(items)
                 image_id = int(items[0])
-                class_id = int(items[1])
-                confidence = float(items[2])
-                xmin = float(items[3])
-                ymin = float(items[4])
-                xmax = float(items[5])
-                ymax = float(items[6])
-                if image_id in detections:
-                    detections[image_id].append([class_id, confidence, xmin, ymin, xmax, ymax])
-                else:
-                    detections[image_id] = [[class_id, confidence, xmin, ymin, xmax, ymax]]
-            prev_last_ind = last_ind
-            last_ind = pick_lines[-1] + 1
+                # bbox = img.bboxes
+                # if img.image_id not in detections.keys(): 
+                    # detections.update(img.__dict__())
 
-        if (prev_last_ind != last_ind):
-            ap = det_eval.evaluate(detections)
+                if image_id in detections:
+                    detections[image_id].addBbox(items)
+                else:
+                    detections[image_id] = Image(items)
+        
+        prev_last_ind = last_ind
+        # last_ind = pick_lines[len(lines)-1] + 1
+        print detections[1]
+        ap = det_eval.evaluate(detections)
+
+        print "evaluated", prev_last_ind, last_ind, len(lines)
+        # if (prev_last_ind != last_ind):
+
 
         pm_lines = tail (pm_file, 1)
         pm_vals = pm_lines.rstrip("\n").split(",")
         if float (pm_vals[-2]) > 0:
-            print "SCORE =", ap / float (pm_vals[-2])
+            print r_user, "power =", pm_vals[-2], "mAP =", ap, "score =", (ap / float (pm_vals[-2]))
         #print "last_ind =", last_ind, "prev_last_ind =", prev_last_ind, "ap =", ap, "len of dict =", len(detections)
         #print pm_lines
         time_elapsed += r_interval

@@ -146,8 +146,8 @@ import socket                                                             # Comu
 #++++++++++++++++++++++++++++++++ Global Variables +++++++++++++++++++++++++++++++++++
 this_file_path = os.path.dirname(os.path.abspath(__file__))
 
-host_ipaddress = '127.0.0.1'
-host_port = '5000'
+host_ipaddress = '192.168.1.2'
+host_port = '8000'
 test_images_dir_wildcard = os.path.join(this_file_path, '../images/*.*')
 test_result = os.path.join(this_file_path, 'result/result.csv')
 mode_debug = 'None' #'None'
@@ -538,13 +538,12 @@ def login_check():
         return Response(response=resp_missing_username_or_password, status=401) # Unauthorized
 
     try:
-        # Validate username and password
+    # Validate username and password
         if verify_user_entry(rx_username,rx_password) is None:
             return Response(response=resp_login_fail, status=401) # Unauthorized
 
         # Generate time limited token
         token = generate_token(rx_username,rx_password)
-
         # Start Powermeter
         if ((enable_powermeter == 1) and (powermeter_start(rx_username) is not None)):
             delete_lpirc_session(rx_username)
@@ -553,7 +552,7 @@ def login_check():
             delete_lpirc_session(rx_username)
             return Response(response=resp_powermeter_fail, status=500)
         if not os.path.isdir(lpirc_tmpresultcsv_dir):
-            os.path.mkdir(lpirc_tmpresultcsv_dir)
+            os.mkdir(lpirc_tmpresultcsv_dir)
         tmp_f = open(os.path.join(lpirc_tmpresultcsv_dir, rx_username + '.csv'), 'w')
         tmp_f.close()
         if ((enable_display == 1) and (display_start (rx_username) is not None)):
