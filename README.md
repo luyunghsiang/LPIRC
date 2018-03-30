@@ -1,3 +1,7 @@
+# This repository has retired. Please use
+
+https://github.com/ieeelpirc
+
 # LPIRC
 Low-Power Image Recognition Challenge
 
